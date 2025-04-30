@@ -24,7 +24,60 @@ local hotkeys_popup = require("awful.hotkeys_popup")
 -- local cyclefocus = require('cyclefocus')
 require("awful.hotkeys_popup.keys")
 local mytable       = awful.util.table or gears.table -- 4.{0,1} compatibility
+local dpi           = require("beautiful.xresources").apply_dpi
 
+-- }}}
+
+-- {{{ Helper functions for theming
+-- Helper function to add alpha channel to colors
+local function add_alpha(color, alpha)
+    if color:find("#") == 1 then
+        local r, g, b
+        -- Check if it's a 6-digit or 3-digit hex code
+        if #color == 7 then -- #RRGGBB format
+            r = tonumber("0x"..color:sub(2,3))
+            g = tonumber("0x"..color:sub(4,5))
+            b = tonumber("0x"..color:sub(6,7))
+        elseif #color == 4 then -- #RGB format
+            r = tonumber("0x"..color:sub(2,2)..color:sub(2,2))
+            g = tonumber("0x"..color:sub(3,3)..color:sub(3,3))
+            b = tonumber("0x"..color:sub(4,4)..color:sub(4,4))
+        else
+            return color
+        end
+        
+        if r and g and b then
+            -- Convert alpha from 0-1 to 0-255 and format as hex
+            local a = math.floor(alpha * 255)
+            return string.format("#%02x%02x%02x%02x", r, g, b, a)
+        end
+    end
+    return color
+end
+
+-- Create a color palette to ensure consistency
+local theme_colors = {
+    bg_normal = beautiful.bg_normal or "#222222",
+    bg_focus = beautiful.bg_focus or "#535d6c",
+    bg_urgent = beautiful.bg_urgent or "#ff0000",
+    fg_normal = beautiful.fg_normal or "#aaaaaa",
+    fg_focus = beautiful.fg_focus or "#ffffff",
+    fg_urgent = beautiful.fg_urgent or "#ffffff",
+    border_normal = beautiful.border_normal or "#000000",
+    border_focus = beautiful.border_focus or "#535d6c"
+}
+
+-- Helper function to create theme-consistent rounded containers
+local function create_rounded_container(widget, bg_color, fg_color, radius)
+    local container = wibox.container.background()
+    container.bg = bg_color
+    container.fg = fg_color
+    container.shape = function(cr, w, h)
+        gears.shape.rounded_rect(cr, w, h, radius or 4)
+    end
+    container.widget = widget
+    return container
+end
 -- }}}
 
 -- {{{ Error handling
@@ -57,6 +110,39 @@ do
         in_error = false
     end)
 end
+
+-- Customize notifications
+naughty.config.padding = 15
+naughty.config.spacing = 5
+
+-- Custom notification styles with transparency and rounded corners
+naughty.config.presets.normal = {
+    timeout = 5,
+    position = "top_right",
+    bg = add_alpha(theme_colors.bg_normal, 0.8),
+    fg = theme_colors.fg_normal,
+    border_width = 2,
+    border_color = add_alpha(theme_colors.border_normal, 0.7),
+    margin = 10,
+    opacity = 0.9,
+    shape = function(cr, w, h)
+        gears.shape.rounded_rect(cr, w, h, 8)
+    end
+}
+
+naughty.config.presets.low = gears.table.clone(naughty.config.presets.normal)
+naughty.config.presets.critical = {
+    timeout = 0,
+    bg = add_alpha(theme_colors.bg_urgent, 0.8),
+    fg = theme_colors.fg_urgent,
+    border_width = 2,
+    border_color = add_alpha(theme_colors.border_focus, 0.9),
+    margin = 10,
+    opacity = 0.9,
+    shape = function(cr, w, h)
+        gears.shape.rounded_rect(cr, w, h, 8)
+    end
+}
 
 -- }}}
 
@@ -164,22 +250,188 @@ awful.util.taglist_buttons = mytable.join(
     awful.button({ }, 5, function(t) awful.tag.viewprev(t.screen) end)
 )
 
--- awful.util.tasklist_buttons = mytable.join(
---      awful.button({ }, 1, function(c)
---          if c == client.focus then
---              c.minimized = true
---          else
---              c:emit_signal("request::activate", "tasklist", { raise = true })
---          end
---      end),
---      awful.button({ }, 3, function()
---          awful.menu.client_list({ theme = { width = 250 } })
---      end),
---      awful.button({ }, 4, function() awful.client.focus.byidx(1) end),
---      awful.button({ }, 5, function() awful.client.focus.byidx(-1) end)
--- )
-
 beautiful.init(string.format("%s/.config/awesome/themes/%s/theme.lua", os.getenv("HOME"), chosen_theme))
+
+-- Create a custom system monitor widget
+local system_monitor = {}
+
+-- Default colors for system monitor widgets (backup if beautiful is not loaded yet)
+local default_bg_focus = "#535d6c"
+local default_bg_urgent = "#ff0000"
+
+-- CPU widget
+system_monitor.cpu = wibox.widget {
+    {
+        {
+            id = "icon",
+            text = " ", -- FontAwesome icon
+            font = "FontAwesome 11",
+            widget = wibox.widget.textbox,
+        },
+        {
+            id = "text",
+            text = "CPU: N/A",
+            widget = wibox.widget.textbox,
+        },
+        layout = wibox.layout.fixed.horizontal,
+        spacing = 5,
+    },
+    bg = (beautiful.bg_focus or default_bg_focus) .. "40",
+    shape = function(cr, w, h) gears.shape.rounded_rect(cr, w, h, 4) end,
+    widget = wibox.container.background,
+}
+
+-- Memory widget
+system_monitor.memory = wibox.widget {
+    {
+        {
+            id = "icon",
+            text = " ", -- FontAwesome icon
+            font = "FontAwesome 11",
+            widget = wibox.widget.textbox,
+        },
+        {
+            id = "text",
+            text = "RAM: N/A",
+            widget = wibox.widget.textbox,
+        },
+        layout = wibox.layout.fixed.horizontal,
+        spacing = 5,
+    },
+    bg = (beautiful.bg_focus or default_bg_focus) .. "40",
+    shape = function(cr, w, h) gears.shape.rounded_rect(cr, w, h, 4) end,
+    widget = wibox.container.background,
+}
+
+-- Battery widget
+system_monitor.battery = wibox.widget {
+    {
+        {
+            id = "icon",
+            text = " ", -- FontAwesome icon
+            font = "FontAwesome 11",
+            widget = wibox.widget.textbox,
+        },
+        {
+            id = "text",
+            text = "BAT: N/A",
+            widget = wibox.widget.textbox,
+        },
+        layout = wibox.layout.fixed.horizontal,
+        spacing = 5,
+    },
+    bg = (beautiful.bg_focus or default_bg_focus) .. "40",
+    shape = function(cr, w, h) gears.shape.rounded_rect(cr, w, h, 4) end,
+    widget = wibox.container.background,
+}
+
+-- Update CPU usage
+local cpu_update_timer = gears.timer {
+    timeout = 5,
+    callback = function()
+        awful.spawn.easy_async_with_shell("grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {print usage}'", function(stdout)
+            local cpu_usage = tonumber(stdout) or 0
+            local cpu_text = string.format("CPU: %.1f%%", cpu_usage)
+            local cpu_widget = system_monitor.cpu:get_children_by_id("text")[1]
+            if cpu_widget then
+                cpu_widget.text = cpu_text
+            end
+            
+            -- Change color based on usage
+            if cpu_usage > 80 then
+                system_monitor.cpu.bg = (beautiful.bg_urgent or default_bg_urgent) .. "60"
+            elseif cpu_usage > 50 then
+                system_monitor.cpu.bg = "#f0932b60" -- Orange with transparency
+            else
+                system_monitor.cpu.bg = (beautiful.bg_focus or default_bg_focus) .. "40"
+            end
+        end)
+    end
+}
+
+-- Update Memory usage
+local memory_update_timer = gears.timer {
+    timeout = 5,
+    callback = function()
+        awful.spawn.easy_async_with_shell("free -m | grep 'Mem:' | awk '{print $3/$2 * 100.0}'", function(stdout)
+            local mem_usage = tonumber(stdout) or 0
+            local mem_text = string.format("RAM: %.1f%%", mem_usage)
+            local mem_widget = system_monitor.memory:get_children_by_id("text")[1]
+            if mem_widget then
+                mem_widget.text = mem_text
+            end
+            
+            -- Change color based on usage
+            if mem_usage > 80 then
+                system_monitor.memory.bg = (beautiful.bg_urgent or default_bg_urgent) .. "60"
+            elseif mem_usage > 50 then
+                system_monitor.memory.bg = "#f0932b60" -- Orange with transparency
+            else
+                system_monitor.memory.bg = (beautiful.bg_focus or default_bg_focus) .. "40"
+            end
+        end)
+    end
+}
+
+-- Update Battery status
+local battery_update_timer = gears.timer {
+    timeout = 30,
+    callback = function()
+        -- Check if battery exists
+        awful.spawn.easy_async_with_shell("ls /sys/class/power_supply/BAT*", function(bat_stdout)
+            if bat_stdout ~= "" then
+                awful.spawn.easy_async_with_shell("cat /sys/class/power_supply/BAT*/capacity", function(stdout)
+                    local battery_level = tonumber(stdout) or 0
+                    awful.spawn.easy_async_with_shell("cat /sys/class/power_supply/BAT*/status", function(status_stdout)
+                        local charging = status_stdout:match("Charging") ~= nil
+                        local bat_icon = system_monitor.battery:get_children_by_id("icon")[1]
+                        local bat_text = system_monitor.battery:get_children_by_id("text")[1]
+                        
+                        -- Update icon based on battery level and charging status
+                        if bat_icon and bat_text then
+                            local icon = " " -- Default icon
+                            if charging then
+                                icon = " " -- Charging icon
+                                bat_text.text = string.format("BAT: %d%% (Charging)", battery_level)
+                            else
+                                if battery_level < 20 then
+                                    icon = " " -- Low battery
+                                elseif battery_level < 50 then
+                                    icon = " " -- Medium battery
+                                else
+                                    icon = " " -- Full battery
+                                end
+                                bat_text.text = string.format("BAT: %d%%", battery_level)
+                            end
+                            bat_icon.text = icon
+                            
+                            -- Change color based on battery level
+                            if not charging and battery_level < 20 then
+                                system_monitor.battery.bg = (beautiful.bg_urgent or default_bg_urgent) .. "60"
+                            elseif not charging and battery_level < 40 then
+                                system_monitor.battery.bg = "#f0932b60" -- Orange with transparency
+                            else
+                                system_monitor.battery.bg = (beautiful.bg_focus or default_bg_focus) .. "40"
+                            end
+                        end
+                    end)
+                end)
+            else
+                -- No battery found
+                local bat_text = system_monitor.battery:get_children_by_id("text")[1]
+                if bat_text then
+                    bat_text.text = "No Battery"
+                end
+                system_monitor.battery.visible = false
+            end
+        end)
+    end
+}
+
+-- Start the timer after beautiful has been initialized
+cpu_update_timer:start()
+memory_update_timer:start()
+battery_update_timer:start()
 
 -- }}}
 
@@ -273,60 +525,288 @@ root.buttons(mytable.join(
 
 -- {{{ Key bindings
 
--- Create a progressbar widget
-local progressbar = wibox.widget {
+-- Create a progressbar widget with modern styling
+local volume_progressbar = wibox.widget {
     max_value        = 100,
     value            = 50,
-    forced_height    = 20,
-    forced_width     = 180,
-    paddings         = 0,
-    -- cjange the radius of the progressbar
-    
-    ticks            = true,
-    ticks_size       = 7,
-    ticks_gap        = 1,
+    forced_height    = dpi(10),
+    forced_width     = dpi(200),
+    paddings         = dpi(1),
     shape            = gears.shape.rounded_bar,
     bar_shape        = gears.shape.rounded_bar,
-    color            = beautiful.bg_focus,
-    background_color = "#ffffff38",
-    border_width     = 1,
-    border_color     = beautiful.bg_focus,
+    color = {
+        type = "linear",
+        from = { 0, 0 },
+        to = { dpi(200), 0 },
+        stops = {
+            { 0, beautiful.bg_focus },
+            { 0.5, beautiful.fg_focus },
+            { 1, add_alpha(beautiful.bg_urgent, 0.7) }
+        }
+    },
+    background_color = add_alpha(beautiful.bg_normal, 0.3),
+    border_width     = dpi(1),
+    border_color     = beautiful.border_focus,
     widget           = wibox.widget.progressbar,
 }
 
--- Create a wibox to contain the progressbar
-local progressbar_wibox = wibox {
-    ontop = true,
-    shape = gears.shape.rounded_bar,
-    width = 200,
-    height = 50,
-    visible = false,
-    widget = progressbar,
+-- Create a volume icon with modern styling
+local volume_icon = wibox.widget {
+    font = "FontAwesome 24", -- Larger icon
+    align = "center",
+    valign = "center",
+    widget = wibox.widget.textbox,
 }
 
--- Function to show the progressbar
-local function show_progressbar()
-    -- Center the wibox
-    awful.placement.centered(progressbar_wibox)
+-- Create a volume percentage text with improved styling
+local volume_text = wibox.widget {
+    font = beautiful.font .. " 14", -- Larger text
+    align = "center",
+    valign = "center",
+    widget = wibox.widget.textbox,
+}
 
-    -- Update the progressbar value
-    awful.spawn.easy_async_with_shell("amixer get Master", function(stdout)
-        local volume = tonumber(stdout:match("(%d?%d?%d)%%"))
-        if volume then
-            progressbar.value = volume
+-- Function to update volume icon based on level with modern aesthetics
+local function update_volume_icon(volume, is_muted)
+    -- Try to use Nerd Font icons first
+    awful.spawn.easy_async_with_shell("fc-list | grep -i 'nerd\\|awesome'", function(stdout)
+        local has_special_fonts = stdout ~= ""
+        
+        if has_special_fonts then
+            -- Use Nerd Font or FontAwesome icons with color
+            if is_muted or volume == 0 then
+                volume_icon.markup = "<span foreground='" .. beautiful.fg_urgent .. "' font='24px'>󰝟</span>"
+            elseif volume < 30 then
+                volume_icon.markup = "<span foreground='" .. beautiful.fg_normal .. "' font='24px'>󰕿</span>"
+            elseif volume < 70 then
+                volume_icon.markup = "<span foreground='" .. beautiful.fg_normal .. "' font='24px'>󰖀</span>"
+            else
+                volume_icon.markup = "<span foreground='" .. beautiful.fg_normal .. "' font='24px'>󰕾</span>"
+            end
         else
-            print("Error: Could not get volume level")
+            -- Fallback to FontAwesome icons
+            if is_muted or volume == 0 then
+                volume_icon.markup = "<span foreground='" .. beautiful.fg_urgent .. "' font='24px'></span>" -- fa-volume-mute
+            elseif volume < 30 then
+                volume_icon.markup = "<span foreground='" .. beautiful.fg_normal .. "' font='24px'></span>" -- fa-volume-down
+            elseif volume < 70 then
+                volume_icon.markup = "<span foreground='" .. beautiful.fg_normal .. "' font='24px'></span>" -- fa-volume-down
+            else
+                volume_icon.markup = "<span foreground='" .. beautiful.fg_normal .. "' font='24px'></span>" -- fa-volume-up
+            end
         end
+        
+        -- Update the volume text with modern styling
+        volume_text.markup = "<span foreground='" .. beautiful.fg_focus .. 
+                            "' font='" .. beautiful.font .. " 14'>" .. volume .. "%</span>"
     end)
-
-    -- Show the wibox
-    progressbar_wibox.visible = true
-
-    -- Hide the wibox after 4 seconds
-    gears.timer.start_new(4, function() progressbar_wibox.visible = false end)
 end
 
+-- Combined layout for the volume widget with enhanced styling
+local volume_widget = wibox.widget {
+    {
+        {
+            {
+                volume_icon,
+                right = dpi(12),
+                widget = wibox.container.margin
+            },
+            nil,
+            {
+                volume_text,
+                left = dpi(12),
+                widget = wibox.container.margin
+            },
+            layout = wibox.layout.align.horizontal
+        },
+        bottom = dpi(10),
+        widget = wibox.container.margin
+    },
+    {
+        volume_progressbar,
+        top = dpi(5),
+        bottom = dpi(10),
+        left = dpi(10),
+        right = dpi(10),
+        widget = wibox.container.margin
+    },
+    layout = wibox.layout.fixed.vertical
+}
 
+-- Add a modern glass effect for better visibility
+local volume_with_shadow = wibox.container.background(
+    wibox.container.margin(volume_widget, dpi(25), dpi(25), dpi(20), dpi(20)),
+    beautiful.bg_normal .. "B3" -- 70% opacity
+)
+
+-- Add rounded corners and subtle border
+volume_with_shadow.shape = function(cr, w, h)
+    gears.shape.rounded_rect(cr, w, h, dpi(15))
+end
+volume_with_shadow.border_width = dpi(1)
+volume_with_shadow.border_color = beautiful.border_focus .. "40" -- Subtle border
+
+-- Create the volume display popup with enhanced styling
+local volume_popup = awful.popup {
+    widget = volume_with_shadow,
+    ontop = true,
+    visible = false,
+    type = "notification",
+    shape = function(cr, w, h)
+        gears.shape.rounded_rect(cr, w, h, dpi(15))
+    end,
+    bg = "#00000000", -- Fully transparent background
+    placement = awful.placement.centered,
+    width = dpi(300),
+    height = dpi(120),
+}
+
+-- Animation for smooth transitions with enhanced easing
+local animation_steps = 20 -- More steps for smoother animation
+local animation_timeout = 0.008 -- Slightly faster for more responsive feel
+local animation_target_value = 0
+local animation_current_step = 0
+local animation_timer = nil
+
+-- Function to animate the progress bar with easing function
+local function animate_progressbar(target)
+    if animation_timer then
+        animation_timer:stop()
+    end
+    
+    animation_target_value = target
+    animation_current_step = 0
+    local start_value = volume_progressbar.value
+    
+    animation_timer = gears.timer.start_new(animation_timeout, function()
+        animation_current_step = animation_current_step + 1
+        local progress = animation_current_step / animation_steps
+        
+        -- Easing function for smoother animation (ease out quad)
+        local eased_progress = -(progress * (progress - 2))
+        local new_value = start_value + (animation_target_value - start_value) * eased_progress
+        
+        volume_progressbar.value = new_value
+        
+        if animation_current_step >= animation_steps then
+            return false -- Stop the timer
+        end
+        return true -- Continue the timer
+    end)
+end
+
+-- Function to show the volume popup with fade-in effect
+local function show_volume_popup()
+    -- Check if muted
+    awful.spawn.easy_async_with_shell("amixer get Master | grep '\\[off\\]'", function(stdout_muted)
+        local is_muted = stdout_muted ~= ""
+        
+        -- Get volume level
+        awful.spawn.easy_async_with_shell("amixer get Master", function(stdout)
+            local volume = tonumber(stdout:match("(%d?%d?%d)%%")) or 0
+            update_volume_icon(volume, is_muted)
+            
+            if is_muted then
+                -- Set the progressbar to 0 when muted
+                animate_progressbar(0)
+            else
+                animate_progressbar(volume)
+            end
+            
+            -- Show popup with fade-in effect
+            volume_popup.opacity = 0
+            volume_popup.visible = true
+            
+            -- Animate opacity for fade-in
+            local opacity_timer = gears.timer {
+                timeout = 0.01,
+                call_now = true,
+                autostart = true,
+                callback = function(t)
+                    volume_popup.opacity = volume_popup.opacity + 0.1
+                    if volume_popup.opacity >= 1 then
+                        t:stop()
+                    end
+                end
+            }
+            
+            -- Hide popup after a delay with fade-out
+            gears.timer.start_new(2, function()
+                local opacity_timer_out = gears.timer {
+                    timeout = 0.01,
+                    call_now = true,
+                    autostart = true,
+                    callback = function(t)
+                        volume_popup.opacity = volume_popup.opacity - 0.1
+                        if volume_popup.opacity <= 0 then
+                            volume_popup.visible = false
+                            t:stop()
+                        end
+                    end
+                }
+                return false
+            end)
+        end)
+    end)
+end
+
+-- Replace the original show_progressbar function with the new one
+show_progressbar = show_volume_popup
+
+-- Modify the wibox transparency and styling
+local wibox_opacity = "90" -- More transparency for glass effect (90 = ~35% opacity)
+
+-- Apply transparency to wiboxes created by beautiful
+local old_at_screen_connect = beautiful.at_screen_connect
+beautiful.at_screen_connect = function(s)
+    old_at_screen_connect(s)
+    
+    -- Add transparency to wibox with glass effect
+    if s.mywibox then
+        s.mywibox.bg = beautiful.bg_normal .. wibox_opacity
+        
+        -- Add drop shadow for depth
+        s.mywibox.shape = function(cr, w, h)
+            gears.shape.partially_rounded_rect(cr, w, h, false, false, true, true, dpi(12))
+        end
+        
+        -- Apply smooth box blur effect when window is under the wibox
+        s.mywibox:connect_signal("request::display", function(w)
+            w.opacity = 0.9 -- Slight transparency for subtle effect
+        end)
+    end
+    
+    -- Apply modern styling to bottom wibox if it exists
+    if s.mybottomwibox then
+        s.mybottomwibox.bg = beautiful.bg_normal .. wibox_opacity
+        
+        -- Add drop shadow and rounded corners
+        s.mybottomwibox.shape = function(cr, w, h)
+            gears.shape.partially_rounded_rect(cr, w, h, true, true, false, false, dpi(12))
+        end
+        
+        -- Apply glass effect
+        s.mybottomwibox:connect_signal("request::display", function(w)
+            w.opacity = 0.9
+        end)
+    end
+end
+
+-- Add a scroll handler for the wibox with smooth animations
+awful.screen.connect_for_each_screen(function(s)
+    if s.mywibox then
+        s.mywibox.visible = true -- Ensure wibox is visible by default
+        
+        -- Add hover effect to wibox (slightly more opaque on hover)
+        s.mywibox:connect_signal("mouse::enter", function()
+            s.mywibox.bg = beautiful.bg_normal .. "A0" -- ~63% opacity on hover
+        end)
+        
+        s.mywibox:connect_signal("mouse::leave", function()
+            s.mywibox.bg = beautiful.bg_normal .. wibox_opacity -- Back to normal opacity
+        end)
+    end
+end)
 
 globalkeys = mytable.join(
 -- alt + tab to switch between windows
@@ -551,42 +1031,42 @@ globalkeys = mytable.join(
               {description = "-1%", group = "hotkeys"}),
 
     -- ALSA volume control
-   -- Update the volume control hotkeys to show the slider
-awful.key({ modkey }, "Up",
-function ()
-    os.execute(string.format("amixer -q set %s 1%%+", beautiful.volume.channel))
-    beautiful.volume.update()
-    show_progressbar()
-end,
-{description = "volume up", group = "hotkeys"}),
-awful.key({ modkey }, "Down",
-function ()
-    os.execute(string.format("amixer -q set %s 1%%-", beautiful.volume.channel))
-    beautiful.volume.update()
-    show_progressbar()
-end,
-{description = "volume down", group = "hotkeys"}),
-awful.key({ modkey }, "m",
-function ()
-    os.execute(string.format("amixer -q set %s toggle", beautiful.volume.togglechannel or beautiful.volume.channel))
-    beautiful.volume.update()
-    show_progressbar()
-end,
-{description = "toggle mute", group = "hotkeys"}),
-awful.key({ modkey, "Control" }, "m",
-function ()
-    os.execute(string.format("amixer -q set %s 100%%", beautiful.volume.channel))
-    beautiful.volume.update()
-    show_progressbar()
-end,
-{description = "volume 100%", group = "hotkeys"}),
-awful.key({ modkey, "Control" }, "0",
-function ()
-    os.execute(string.format("amixer -q set %s 0%%", beautiful.volume.channel))
-    beautiful.volume.update()
-    show_progressbar()
-end,
-{description = "volume 0%", group = "hotkeys"}),
+    -- Update the volume control hotkeys to show the slider
+    awful.key({ modkey }, "Up",
+    function ()
+        os.execute(string.format("amixer -q set %s 1%%+", beautiful.volume.channel))
+        beautiful.volume.update()
+        show_volume_popup()
+    end,
+    {description = "volume up", group = "hotkeys"}),
+    awful.key({ modkey }, "Down",
+    function ()
+        os.execute(string.format("amixer -q set %s 1%%-", beautiful.volume.channel))
+        beautiful.volume.update()
+        show_volume_popup()
+    end,
+    {description = "volume down", group = "hotkeys"}),
+    awful.key({ modkey }, "m",
+    function ()
+        os.execute(string.format("amixer -q set %s toggle", beautiful.volume.togglechannel or beautiful.volume.channel))
+        beautiful.volume.update()
+        show_volume_popup()
+    end,
+    {description = "toggle mute", group = "hotkeys"}),
+    awful.key({ modkey, "Control" }, "m",
+    function ()
+        os.execute(string.format("amixer -q set %s 100%%", beautiful.volume.channel))
+        beautiful.volume.update()
+        show_volume_popup()
+    end,
+    {description = "volume 100%", group = "hotkeys"}),
+    awful.key({ modkey, "Control" }, "0",
+    function ()
+        os.execute(string.format("amixer -q set %s 0%%", beautiful.volume.channel))
+        beautiful.volume.update()
+        show_volume_popup()
+    end,
+    {description = "volume 0%", group = "hotkeys"}),
 
     -- MPD control
     awful.key({ modkey, "Control" }, "Up",
@@ -673,8 +1153,17 @@ end,
                     history_path = awful.util.get_cache_dir() .. "/history_eval"
                   }
               end,
-              {description = "lua execute prompt", group = "awesome"})
-    --]]
+              {description = "lua execute prompt", group = "awesome"}),
+
+    -- Toggle dark theme with Win+Alt+D
+    awful.key({ modkey, altkey }, "d", function()
+        awesome.emit_signal("dark_theme::toggle")
+        naughty.notify({
+            title = "Dark Theme",
+            text = "Toggling dark theme for all applications",
+            timeout = 2
+        })
+    end, {description = "toggle dark theme", group = "awesome"})
 )
 
 clientkeys = mytable.join(
@@ -895,30 +1384,46 @@ client.connect_signal("request::titlebars", function(c)
         end)
     )
 
-    awful.titlebar(c, { size = 16 }) : setup {
+    -- Create a modern, semi-transparent titlebar
+    awful.titlebar(c, { size = 32, bg = beautiful.bg_normal .. "CC" }) : setup {
         { -- Left
-            awful.titlebar.widget.iconwidget(c),
+            {
+                awful.titlebar.widget.iconwidget(c),
+                margins = 5,
+                widget = wibox.container.margin
+            },
             buttons = buttons,
             layout  = wibox.layout.fixed.horizontal
         },
         { -- Middle
             { -- Title
                 align  = "center",
+                font   = beautiful.font .. " 10",
                 widget = awful.titlebar.widget.titlewidget(c)
             },
             buttons = buttons,
             layout  = wibox.layout.flex.horizontal
         },
         { -- Right
-            awful.titlebar.widget.floatingbutton (c),
-            awful.titlebar.widget.maximizedbutton(c),
-            awful.titlebar.widget.stickybutton   (c),
-            awful.titlebar.widget.ontopbutton    (c),
-            awful.titlebar.widget.closebutton    (c),
-            layout = wibox.layout.fixed.horizontal()
+            {
+                awful.titlebar.widget.floatingbutton (c),
+                awful.titlebar.widget.maximizedbutton(c),
+                awful.titlebar.widget.stickybutton   (c),
+                awful.titlebar.widget.ontopbutton    (c),
+                awful.titlebar.widget.closebutton    (c),
+                spacing = 5,
+                layout = wibox.layout.fixed.horizontal()
+            },
+            margins = 5,
+            widget = wibox.container.margin
         },
         layout = wibox.layout.align.horizontal
     }
+    
+    -- Add rounded corners to the client
+    c.shape = function(cr, w, h)
+        gears.shape.rounded_rect(cr, w, h, 8)
+    end
 end)
 
 -- Enable sloppy focus, so that focus follows mouse.
@@ -926,8 +1431,19 @@ end)
 --     c:emit_signal("request::activate", "mouse_enter", {raise = vi_focus})
 -- end)
 
-client.connect_signal("focus", function(c) c.border_color = beautiful.border_focus end)
-client.connect_signal("unfocus", function(c) c.border_color = beautiful.border_normal end)
+client.connect_signal("focus", function(c)
+    c.border_color = beautiful.border_focus
+    if not c.fullscreen then
+        c.opacity = 1.0
+    end
+end)
+
+client.connect_signal("unfocus", function(c)
+    c.border_color = beautiful.border_normal
+    if not c.fullscreen and not c.maximized then
+        c.opacity = 0.90
+    end
+end)
 
 -- switch to parent after closing child window
 local function backham()
@@ -952,19 +1468,72 @@ tag.connect_signal("property::selected", backham)
 
 -- autostart application
 
--- -- desktop wallpaper
--- awful.spawn.once("nitrogen --restore")
+-- Apply dark theme
+local dark_theme = require("modules.autostart.dark-theme")
+dark_theme.init()
+
+-- Configure and start picom for visual effects
+awful.spawn.easy_async_with_shell("pgrep picom", function(stdout)
+    if not stdout or stdout == "" then
+        awful.spawn.with_shell("picom --backend glx --vsync --shadow-radius=15 --corner-radius=8 --shadow-opacity=0.85 --active-opacity=1.0 --inactive-opacity=0.90 --shadow-offset-x=-15 --shadow-offset-y=-15 --shadow-color=\"#000000\" -b")
+        -- Create picom configuration if it doesn't exist
+        awful.spawn.with_shell("mkdir -p ~/.config/picom")
+        awful.spawn.with_shell([[
+        if [ ! -f ~/.config/picom/picom.conf ]; then
+            cat > ~/.config/picom/picom.conf << 'EOF'
+# Shadows
+shadow = true;
+shadow-radius = 15;
+shadow-offset-x = -15;
+shadow-offset-y = -15;
+shadow-opacity = 0.85;
+shadow-color = "#000000";
+
+# Fading
+fading = true;
+fade-in-step = 0.03;
+fade-out-step = 0.03;
+fade-delta = 5;
+
+# Transparency / Opacity
+inactive-opacity = 0.90;
+active-opacity = 1.0;
+frame-opacity = 0.9;
+inactive-opacity-override = false;
+
+# Window type settings
+wintypes:
+{
+  tooltip = { fade = true; shadow = false; opacity = 0.9; focus = true; };
+  dock = { shadow = false; clip-shadow-above = true; };
+  dnd = { shadow = false; };
+  popup_menu = { opacity = 0.9; };
+  dropdown_menu = { opacity = 0.9; };
+};
+
+# Corners
+corner-radius = 8;
+rounded-corners-exclude = [
+  "window_type = 'dock'",
+  "window_type = 'desktop'"
+];
+
+# Blur
+blur-background = true;
+blur-method = "dual_kawase";
+blur-strength = 5;
+blur-background-exclude = [
+  "window_type = 'dock'",
+  "window_type = 'desktop'"
+];
+EOF
+        fi
+        ]])
+    end
+end)
 
 -- set the wallpaper
--- running the bash script in the home directory
--- awful.spawn.with_shell("bash $HOME/.config/awesome/set_wallpaper.sh")
--- -- start picom compositor
--- awful.spawn.easy_async_with_shell("pgrep picom", function(stdout)
---     if not stdout or stdout == "" then
---         awful.spawn.with_shell("picom -b")
---     end
--- end)
-
+awful.spawn.with_shell("bash $HOME/.config/awesome/set_wallpaper.sh")
 
 -- battrey manager
 -- awful.spawn.easy_async_with_shell("pgrep cbatticon", function(stdout)
@@ -1013,3 +1582,6 @@ awful.spawn.easy_async_with_shell("pgrep flameshot", function(stdout)
         awful.spawn.with_shell("flameshot")
     end
 end)
+awful.spawn.with_shell("xinput set-prop 'DELL09E1:00 04F3:30CB Touchpad' 'libinput Tapping Enabled' 1")
+awful.spawn.with_shell("setxkbmap -layout us,ara -option 'grp:alt_shift_toggle'")
+awful.spawn.with_shell("eval $(gnome-keyring-daemon --start)")

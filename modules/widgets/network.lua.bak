@@ -1,0 +1,217 @@
+local awful = require("awful")
+local wibox = require("wibox")
+local beautiful = require("beautiful")
+local gears = require("gears")
+local naughty = require("naughty")
+
+local network = {}
+
+function network.new()
+    -- Create network status widget
+    local net_icon = wibox.widget {
+        resize = true,
+        widget = wibox.widget.imagebox
+    }
+    
+    local net_text = wibox.widget {
+        markup = "N/A",
+        widget = wibox.widget.textbox
+    }
+    
+    local net_widget = wibox.widget {
+        net_icon,
+        {
+            net_text,
+            left = 6,
+            widget = wibox.container.margin
+        },
+        spacing = 2,
+        layout = wibox.layout.fixed.horizontal
+    }
+    
+    -- Network status variables
+    local net_status = {
+        wireless = {
+            state = "disconnected",
+            ssid = "",
+            signal = 0
+        },
+        wired = {
+            state = "disconnected",
+            interface = ""
+        },
+        active_type = "none"  -- "wireless", "wired", or "none"
+    }
+    
+    -- Ensure the network icons directory exists
+    awful.spawn.easy_async_with_shell("mkdir -p " .. os.getenv("HOME") .. "/.config/awesome/icons/network", function() end)
+    
+    -- Function to get wireless status
+    local function get_wireless_status()
+        awful.spawn.easy_async_with_shell(
+            "nmcli -t -f SIGNAL,ACTIVE,SSID device wifi list 2>/dev/null | grep ':yes:' | head -n1 || echo ''",
+            function(stdout)
+                if stdout ~= "" then
+                    local signal, _, ssid = stdout:match("(%d+):yes:(.*)")
+                    if signal and ssid then
+                        net_status.wireless.state = "connected"
+                        net_status.wireless.signal = tonumber(signal)
+                        net_status.wireless.ssid = ssid
+                        net_status.active_type = "wireless"
+                        awesome.emit_signal("network::update", net_status)
+                    end
+                else
+                    -- Check if interface is up but not connected to any network
+                    awful.spawn.easy_async_with_shell(
+                        "nmcli -t -f STATE,TYPE device 2>/dev/null | grep ':wifi$' || echo ''",
+                        function(out)
+                            if out:match("disconnected:wifi") then
+                                net_status.wireless.state = "disconnected"
+                                net_status.wireless.signal = 0
+                                net_status.wireless.ssid = ""
+                                if net_status.active_type == "wireless" then
+                                    net_status.active_type = "none"
+                                end
+                                awesome.emit_signal("network::update", net_status)
+                            end
+                        end
+                    )
+                end
+            end
+        )
+    end
+    
+    -- Function to get wired status
+    local function get_wired_status()
+        awful.spawn.easy_async_with_shell(
+            "nmcli -t -f STATE,TYPE,DEVICE device 2>/dev/null | grep ':ethernet:' || echo ''",
+            function(stdout)
+                if stdout:match("connected:ethernet:(.*)") then
+                    local interface = stdout:match("connected:ethernet:(.*)")
+                    net_status.wired.state = "connected"
+                    net_status.wired.interface = interface
+                    net_status.active_type = "wired"
+                    awesome.emit_signal("network::update", net_status)
+                else
+                    net_status.wired.state = "disconnected"
+                    if net_status.active_type == "wired" then
+                        -- Only change to none if we were using wired before
+                        net_status.active_type = "none"
+                    end
+                    awesome.emit_signal("network::update", net_status)
+                end
+            end
+        )
+    end
+    
+    -- Function to update network icon
+    local function update_network_icon()
+        local icon_dir = os.getenv("HOME") .. "/.config/awesome/icons/network/"
+        local icon = "wifi-strength-off-outline.png"
+        
+        if net_status.active_type == "wireless" then
+            local strength = net_status.wireless.signal
+            
+            if strength >= 80 then
+                icon = "wifi-strength-4.png"
+            elseif strength >= 60 then
+                icon = "wifi-strength-3.png"
+            elseif strength >= 40 then
+                icon = "wifi-strength-2.png"
+            elseif strength >= 20 then
+                icon = "wifi-strength-1.png"
+            else
+                icon = "wifi-strength-outline.png"
+            end
+            
+            net_text.markup = net_status.wireless.ssid
+        elseif net_status.active_type == "wired" then
+            icon = "ethernet.png"
+            net_text.markup = "Ethernet"
+        else
+            icon = "wifi-strength-off-outline.png"
+            net_text.markup = "Disconnected"
+        end
+        
+        -- Check if icon exists
+        local icon_path = icon_dir .. icon
+        awful.spawn.easy_async_with_shell("test -f '" .. icon_path .. "' && echo 'exists' || echo 'missing'",
+            function(stdout)
+                if stdout:match("exists") then
+                    net_icon.image = icon_path
+                else
+                    -- Create a fallback text representation
+                    net_icon.visible = false
+                end
+            end
+        )
+    end
+    
+    -- Connect to network update signal
+    awesome.connect_signal("network::update", function(status)
+        net_status = status
+        update_network_icon()
+    end)
+    
+    -- Update network status
+    local function update_network_status()
+        get_wireless_status()
+        get_wired_status()
+    end
+    
+    -- Initial update
+    update_network_status()
+    
+    -- Set up timer for updates
+    gears.timer {
+        timeout = 10,
+        call_now = true,
+        autostart = true,
+        callback = update_network_status
+    }
+    
+    -- Tooltip
+    local tooltip = awful.tooltip {
+        objects = { net_widget },
+        timer_function = function()
+            local text = ""
+            
+            if net_status.active_type == "wireless" then
+                text = string.format("Wireless: Connected\nSSID: %s\nSignal Strength: %d%%", 
+                                    net_status.wireless.ssid, net_status.wireless.signal)
+            elseif net_status.active_type == "wired" then
+                text = string.format("Wired: Connected\nInterface: %s", 
+                                    net_status.wired.interface)
+            else
+                text = "Network: Disconnected"
+            end
+            
+            return text
+        end
+    }
+    
+    -- Click to show network details
+    net_widget:buttons(gears.table.join(
+        awful.button({}, 1, function()
+            awful.spawn.easy_async_with_shell(
+                "nmcli device status 2>/dev/null || echo 'Unable to get network status'",
+                function(stdout)
+                    naughty.notify {
+                        title = "Network Status",
+                        text = stdout,
+                        timeout = 10,
+                        position = "top_right",
+                        width = 400
+                    }
+                end
+            )
+        end),
+        awful.button({}, 3, function()
+            awful.spawn("nm-connection-editor")
+        end)
+    ))
+    
+    return net_widget
+end
+
+return network

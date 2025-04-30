@@ -248,10 +248,17 @@ theme.volume.widget:buttons(awful.util.table.join(
                                awful.button({}, 4, function ()
                                      awful.util.spawn("amixer set Master 1%+")
                                      theme.volume.update()
+                                     show_volume_popup()
                                end),
                                awful.button({}, 5, function ()
                                      awful.util.spawn("amixer set Master 1%-")
                                      theme.volume.update()
+                                     show_volume_popup()
+                               end),
+                               awful.button({}, 1, function ()
+                                     awful.util.spawn("amixer set Master toggle")
+                                     theme.volume.update()
+                                     show_volume_popup()
                                end)
 ))
 
@@ -277,29 +284,59 @@ net.widget = net_widget
 
 -- Create the system tray widget
 local systray = wibox.widget.systray()
-systray.visible = false -- Initially hide the system tray
+systray.visible = true -- Make the system tray visible by default
 
--- Create a container for the system tray with a maximum size
-local systray_container = wibox.container.constraint(systray, 'exact', 20, 20)
-systray_container.bg = "#000000" -- Set the initial background color to black
+-- Improve systray spacing and appearance
+systray.base_size = dpi(20) -- Make icons slightly larger
+systray.opacity = 0.9 -- Slightly transparent icons
 
--- Create the arrow widget
-local arrow = wibox.widget.textbox()
-arrow.text = "  <  " -- Set the initial text to ">"
+-- Create a styled container for the system tray
+local systray_container = wibox.container.margin(
+    wibox.container.background(
+        systray,
+        (theme.bg_focus or "#535d6c") .. "70" -- More transparent background
+    ),
+    6, 6, 3, 3 -- Margins: left, right, top, bottom - increased for better visibility
+)
+systray_container.shape = function(cr, w, h) gears.shape.rounded_rect(cr, w, h, 6) end -- More rounded corners
 
--- Add a button to the arrow widget to show/hide the system tray when clicked
-arrow:buttons(awful.util.table.join(
+-- Create the arrow widget to toggle system tray
+local systray_toggle = wibox.widget {
+    {
+        {
+            id = "icon",
+            text = "◀", -- Using a left arrow Unicode character
+            font = "Monospace 11, FontAwesome 11", -- Add fallback fonts
+            widget = wibox.widget.textbox,
+        },
+        margins = 4,
+        widget = wibox.container.margin
+    },
+    bg = (theme.bg_focus or "#535d6c") .. "50",
+    fg = theme.fg_focus or "#ffffff",
+    shape = function(cr, w, h) gears.shape.rounded_rect(cr, w, h, 6) end,
+    widget = wibox.container.background,
+}
+
+-- Add hover effect to systray toggle
+systray_toggle:connect_signal("mouse::enter", function(w)
+    w.bg = (theme.bg_focus or "#535d6c") .. "90" -- Brighter on hover
+end)
+systray_toggle:connect_signal("mouse::leave", function(w)
+    w.bg = (theme.bg_focus or "#535d6c") .. "50" -- Back to normal when mouse leaves
+end)
+
+-- Add button functionality to toggle system tray
+systray_toggle:buttons(awful.util.table.join(
     awful.button({}, 1, function()
         if systray.visible then
-            -- If the system tray is visible, hide it and change the arrow text to ">"
+            -- If the system tray is visible, hide it
             systray.visible = false
-            arrow.text = "  >  "
-            systray_container.bg = "#000000" -- Set the background color to black
+            systray_toggle:get_children_by_id("icon")[1].text = "▶" -- Right arrow
         else
-            -- If the system tray is hidden, show it and change the arrow text to "<"
+            -- If the system tray is hidden, show it
             systray.visible = true
-            arrow.text = "<"
-            systray_container.bg = "#123456" -- Set the background color to #123456
+            systray_toggle:get_children_by_id("icon")[1].text = "◀" -- Left arrow
         end
     end)
 ))
@@ -308,6 +345,70 @@ arrow:buttons(awful.util.table.join(
 local spr     = wibox.widget.textbox(' ')
 local arrl_dl = separators.arrow_left(theme.bg_focus, "alpha")
 local arrl_ld = separators.arrow_left("alpha", theme.bg_focus)
+
+-- Helper function for creating consistent rounded containers with glass effect
+function theme.create_widget_container(widget, args)
+    args = args or {}
+    local bg_color = args.bg_color or (theme.bg_focus .. "80")  -- 50% transparency
+    local fg_color = args.fg_color or theme.fg_normal
+    local radius = args.radius or dpi(8)
+    local padding = args.padding or {
+        left = dpi(8), 
+        right = dpi(8), 
+        top = dpi(5), 
+        bottom = dpi(5)
+    }
+    
+    -- Create padded widget
+    local padded_widget = wibox.container.margin(
+        widget,
+        padding.left, padding.right, padding.top, padding.bottom
+    )
+    
+    -- Create background container
+    local container = wibox.container.background(padded_widget)
+    container.bg = bg_color
+    container.fg = fg_color
+    container.shape = function(cr, w, h)
+        gears.shape.rounded_rect(cr, w, h, radius)
+    end
+    
+    -- Add a subtle border if specified
+    if args.border_width then
+        container.border_width = args.border_width
+        container.border_color = args.border_color or (theme.bg_focus .. "60")
+    end
+    
+    return container
+end
+
+-- Helper function to create widget groups with proper spacing
+function theme.create_widget_group(widgets, args)
+    args = args or {}
+    local spacing = args.spacing or dpi(6)
+    local group_bg = args.bg_color or "transparent"
+    local group_radius = args.radius or dpi(10)
+    
+    local widget_group = wibox.layout.fixed.horizontal()
+    widget_group.spacing = spacing
+    
+    for _, w in ipairs(widgets) do
+        widget_group:add(w)
+    end
+    
+    if group_bg ~= "transparent" then
+        local container = wibox.container.background(
+            wibox.container.margin(widget_group, dpi(6), dpi(6), dpi(3), dpi(3)),
+            group_bg
+        )
+        container.shape = function(cr, w, h)
+            gears.shape.rounded_rect(cr, w, h, group_radius)
+        end
+        return container
+    else
+        return widget_group
+    end
+end
 
 function theme.at_screen_connect(s)
     -- Quake application
@@ -341,69 +442,262 @@ function theme.at_screen_connect(s)
     s.mytasklist = awful.widget.tasklist(s, awful.widget.tasklist.filter.currenttags, awful.util.tasklist_buttons)
 
     -- Create the wibox
-    s.mywibox = awful.wibar({ position = "top", screen = s, height = dpi(18), bg = theme.bg_normal, fg = theme.fg_normal })
+    s.mywibox = awful.wibar({ 
+        position = "top", 
+        screen = s, 
+        height = dpi(32), -- Slightly taller for better visibility
+        bg = theme.bg_normal .. "90",  -- More transparency for glass effect
+        fg = theme.fg_normal 
+    })
+    
+    -- Add a better shadow and rounded corners to the wibox
+    s.mywibox.shape = function(cr, w, h)
+        gears.shape.partially_rounded_rect(cr, w, h, false, false, true, true, dpi(12))
+    end
 
+    -- Create styled system tray with toggle button
+    local systray = wibox.widget.systray()
+    systray.base_size = dpi(22)
+    
+    local systray_container = theme.create_widget_container(systray, {
+        bg_color = theme.bg_normal .. "90",
+        radius = dpi(8),
+        padding = {left = dpi(10), right = dpi(10), top = dpi(3), bottom = dpi(3)}
+    })
+    
+    local systray_toggle = wibox.widget {
+        {
+            {
+                id = "icon",
+                text = " ",  -- Icon: chevron-left
+                font = "FontAwesome 11",
+                widget = wibox.widget.textbox,
+            },
+            widget = wibox.container.margin
+        },
+        bg = theme.bg_focus .. "60",
+        fg = theme.fg_focus,
+        shape = function(cr, w, h) gears.shape.rounded_rect(cr, w, h, dpi(6)) end,
+        widget = wibox.container.background,
+    }
+    
+    -- Add hover effect
+    systray_toggle:connect_signal("mouse::enter", function(w)
+        w.bg = theme.bg_focus .. "90"
+    end)
+    systray_toggle:connect_signal("mouse::leave", function(w)
+        w.bg = theme.bg_focus .. "60"
+    end)
+    
+    -- Toggle functionality
+    systray_toggle:buttons(my_table.join(
+        awful.button({}, 1, function()
+            if systray.visible then
+                systray.visible = false
+                systray_toggle:get_children_by_id("icon")[1].text = " "  -- Right arrow
+            else
+                systray.visible = true
+                systray_toggle:get_children_by_id("icon")[1].text = " "  -- Left arrow
+            end
+        end)
+    ))
+    
+    -- Styled clock widget with icon
+    local clock_widget = wibox.widget {
+        {
+            text = " ",  -- Icon: clock
+            font = "FontAwesome 11",
+            widget = wibox.widget.textbox,
+        },
+        {
+            format = "%a %d %b %H:%M",
+            widget = wibox.widget.textclock
+        },
+        spacing = dpi(4),
+        layout = wibox.layout.fixed.horizontal
+    }
+    
+    local styled_clock = theme.create_widget_container(clock_widget, {
+        bg_color = theme.bg_focus .. "80",
+        radius = dpi(8)
+    })
+    
+    -- Styled volume widget
+    local volume_widget = wibox.widget {
+        {
+            volicon,
+            theme.volume.widget,
+            spacing = dpi(4),
+            layout = wibox.layout.fixed.horizontal
+        },
+        left = dpi(2),
+        widget = wibox.container.margin
+    }
+    
+    local styled_volume = theme.create_widget_container(volume_widget, {
+        bg_color = theme.bg_focus .. "80",
+        radius = dpi(8)
+    })
+    
+    -- Style the CPU widget
+    local cpu_widget = wibox.widget {
+        {
+            {
+                text = " ",  -- Icon: microchip
+                font = "FontAwesome 11",
+                widget = wibox.widget.textbox,
+            },
+            cpu.widget,
+            spacing = dpi(4),
+            layout = wibox.layout.fixed.horizontal
+        },
+        left = dpi(2),
+        widget = wibox.container.margin
+    }
+    
+    local styled_cpu = theme.create_widget_container(cpu_widget, {
+        bg_color = theme.bg_focus .. "80",
+        radius = dpi(8)
+    })
+    
+    -- Style the memory widget
+    local mem_widget = wibox.widget {
+        {
+            {
+                text = " ",  -- Icon: memory
+                font = "FontAwesome 11",
+                widget = wibox.widget.textbox,
+            },
+            mem.widget,
+            spacing = dpi(4),
+            layout = wibox.layout.fixed.horizontal
+        },
+        left = dpi(2),
+        widget = wibox.container.margin
+    }
+    
+    local styled_mem = theme.create_widget_container(mem_widget, {
+        bg_color = theme.bg_focus .. "80",
+        radius = dpi(8)
+    })
+    
+    -- Style the battery widget
+    local bat_widget = wibox.widget {
+        {
+            baticon,
+            bat.widget,
+            spacing = dpi(4),
+            layout = wibox.layout.fixed.horizontal
+        },
+        left = dpi(2),
+        widget = wibox.container.margin
+    }
+    
+    local styled_bat = theme.create_widget_container(bat_widget, {
+        bg_color = theme.bg_focus .. "80",
+        radius = dpi(8)
+    })
+    
+    -- Style the network widget
+    local net_widget = wibox.widget {
+        {
+            neticon,
+            net.widget,
+            spacing = dpi(4),
+            layout = wibox.layout.fixed.horizontal
+        },
+        left = dpi(2),
+        widget = wibox.container.margin
+    }
+    
+    local styled_net = theme.create_widget_container(net_widget, {
+        bg_color = theme.bg_focus .. "80",
+        radius = dpi(8)
+    })
+    
+    -- Create styled keyboardlayout widget
+    local kbd_widget = wibox.widget {
+        {
+            {
+                text = " ",  -- Icon: keyboard
+                font = "FontAwesome 11",
+                widget = wibox.widget.textbox,
+            },
+            keyboardlayout,
+            spacing = dpi(4),
+            layout = wibox.layout.fixed.horizontal
+        },
+        left = dpi(2),
+        widget = wibox.container.margin
+    }
+    
+    local styled_keyboardlayout = theme.create_widget_container(kbd_widget, {
+        bg_color = theme.bg_focus .. "80",
+        radius = dpi(8)
+    })
+    
+    -- Style the taglist
+    local taglist_container = theme.create_widget_container(s.mytaglist, {
+        bg_color = theme.bg_focus .. "70",
+        radius = dpi(8),
+        padding = {left = dpi(6), right = dpi(6), top = dpi(3), bottom = dpi(3)}
+    })
+    
+    -- Style the layoutbox
+    local layoutbox_container = theme.create_widget_container(s.mylayoutbox, {
+        bg_color = theme.bg_focus .. "80",
+        radius = dpi(8),
+        padding = {left = dpi(8), right = dpi(8), top = dpi(6), bottom = dpi(6)}
+    })
+    
+    -- Group similar widgets for better organization
+    local system_info_group = theme.create_widget_group(
+        {styled_cpu, styled_mem, styled_bat},
+        {spacing = dpi(6)}
+    )
+    
+    local network_group = theme.create_widget_group(
+        {styled_net},
+        {spacing = dpi(6)}
+    )
+    
+    local controls_group = theme.create_widget_group(
+        {styled_volume, styled_keyboardlayout},
+        {spacing = dpi(6)}
+    )
+    
+    local time_group = theme.create_widget_group(
+        {styled_clock, layoutbox_container},
+        {spacing = dpi(6)}
+    )
+    
+    local systray_group = theme.create_widget_group(
+        {systray_toggle, systray_container},
+        {spacing = dpi(2)}
+    )
+    
     -- Add widgets to the wibox
     s.mywibox:setup {
         layout = wibox.layout.align.horizontal,
         { -- Left widgets
             layout = wibox.layout.fixed.horizontal,
-            --spr,
-            s.mytaglist,
+            spacing = dpi(10),
+            taglist_container,
             s.mypromptbox,
-            spr,
         },
-                -- Middle widget
-
-        -- s.mytasklist, 
-        {       
-            layout = wibox.layout.fixed.horizontal,
-            spacing = 10, -- Adjust spacing as needed
-            -- s.mytasklist, -- Middle widget
-
-        }, -- Space widget
+        { -- Middle widget - empty
+            layout = wibox.layout.flex.horizontal,
+            nil,
+        },
         { -- Right widgets
+            id = "right_widgets",
             layout = wibox.layout.fixed.horizontal,
-            -- wibox.widget.systray(),
-            arrow,
-            systray,
-            keyboardlayout,
-            spr,
-            arrl_ld,
-            wibox.container.background(mpdicon, theme.bg_focus),
-            wibox.container.background(theme.mpd.widget, theme.bg_focus),
-            arrl_dl,
-            volicon,
-            theme.volume.widget,
-            
-
-            spr,
-            -- arrl_dl,
-            
-            arrl_ld,
-            wibox.container.background(memicon, theme.bg_focus),
-            arrl_dl,
- 
-            mem.widget,
-            -- wibox.container.background(cpuicon, theme.bg_focus),
-            -- wibox.container.background(cpu.widget, theme.bg_focus),
-            -- arrl_dl,
-            -- tempicon,
-            -- temp.widget,
-            arrl_ld,
-            wibox.container.background(fsicon, theme.bg_focus),
-            --wibox.container.background(theme.fs.widget, theme.bg_focus),
-            arrl_dl,
-            baticon,
-            bat.widget,
-            arrl_ld,
-            wibox.container.background(neticon, theme.bg_focus),
-            wibox.container.background(net.widget, theme.bg_focus),
-            arrl_dl,
-            clock,
-            spr,
-            arrl_ld,
-            wibox.container.background(s.mylayoutbox, theme.bg_focus),
+            spacing = dpi(10), -- Add spacing between groups
+            systray_group,
+            system_info_group,
+            network_group,
+            controls_group,
+            time_group,
         },
     }
 end
