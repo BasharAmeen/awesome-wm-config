@@ -36,6 +36,7 @@ local function create_widget_container(widget, width, height)
     local container = wibox.widget {
         {
             widget,
+            id = "widget_container", -- Add an ID for easier targeting
             widget = wibox.container.margin,
             margins = dpi(10)
         },
@@ -82,7 +83,7 @@ local system_dashboard = {}
 system_dashboard.cpu = {}
 system_dashboard.cpu.icon = wibox.widget {
     markup = "<span foreground='#6fa8dc'>󰻠</span>", -- CPU icon
-    font = "FontAwesome 18",
+    font = "Nerd Font Mono 16",
     align = "center",
     widget = wibox.widget.textbox,
 }
@@ -145,7 +146,7 @@ system_dashboard.cpu.widget = create_widget_container(
 system_dashboard.memory = {}
 system_dashboard.memory.icon = wibox.widget {
     markup = "<span foreground='#76a5af'>󰍛</span>", -- Memory icon
-    font = "FontAwesome 18",
+    font = "Nerd Font Mono 16",
     align = "center",
     widget = wibox.widget.textbox,
 }
@@ -178,6 +179,21 @@ system_dashboard.memory.total = wibox.widget {
 
 system_dashboard.memory.progressbar = create_progressbar("#76a5af") -- Teal
 
+-- Add swap usage to memory widget
+system_dashboard.memory.swap_used = wibox.widget {
+    markup = "<span size='small' foreground='#aaaaaa'>Swap: 0MB used</span>",
+    align = "left",
+    widget = wibox.widget.textbox,
+}
+
+system_dashboard.memory.swap_total = wibox.widget {
+    markup = "<span size='small' foreground='#aaaaaa'>0MB total</span>",
+    align = "right",
+    widget = wibox.widget.textbox,
+}
+
+system_dashboard.memory.swap_progressbar = create_progressbar("#a2c4c9") -- Lighter teal for swap
+
 system_dashboard.memory.widget = create_widget_container(
     {
         layout = wibox.layout.fixed.vertical,
@@ -201,6 +217,13 @@ system_dashboard.memory.widget = create_widget_container(
             nil,
             system_dashboard.memory.usage,
         },
+        {
+            layout = wibox.layout.align.horizontal,
+            system_dashboard.memory.swap_used,
+            nil,
+            system_dashboard.memory.swap_total,
+        },
+        system_dashboard.memory.swap_progressbar,
     }
 )
 
@@ -208,7 +231,7 @@ system_dashboard.memory.widget = create_widget_container(
 system_dashboard.disk = {}
 system_dashboard.disk.icon = wibox.widget {
     markup = "<span foreground='#b4a7d6'>󰋊</span>", -- Disk icon
-    font = "FontAwesome 18",
+    font = "Nerd Font Mono 16",
     align = "center",
     widget = wibox.widget.textbox,
 }
@@ -271,7 +294,7 @@ system_dashboard.disk.widget = create_widget_container(
 system_dashboard.network = {}
 system_dashboard.network.icon = wibox.widget {
     markup = "<span foreground='#f6b26b'>󰤨</span>", -- Network icon
-    font = "FontAwesome 18",
+    font = "Nerd Font Mono 16",
     align = "center",
     widget = wibox.widget.textbox,
 }
@@ -302,6 +325,25 @@ system_dashboard.network.upload = wibox.widget {
     widget = wibox.widget.textbox,
 }
 
+-- Add connection type and signal strength
+system_dashboard.network.connection_type = wibox.widget {
+    markup = "<span size='small' foreground='#aaaaaa'>Type: Unknown</span>",
+    align = "center",
+    widget = wibox.widget.textbox,
+}
+
+system_dashboard.network.signal = wibox.widget {
+    markup = "<span size='small' foreground='#aaaaaa'>Signal: N/A</span>",
+    align = "center",
+    widget = wibox.widget.textbox,
+}
+
+system_dashboard.network.transferred = wibox.widget {
+    markup = "<span size='small' foreground='#aaaaaa'>TX: 0B | RX: 0B</span>",
+    align = "center",
+    widget = wibox.widget.textbox,
+}
+
 system_dashboard.network.widget = create_widget_container(
     {
         layout = wibox.layout.fixed.vertical,
@@ -318,20 +360,25 @@ system_dashboard.network.widget = create_widget_container(
             nil,
             system_dashboard.network.interface,
         },
+        system_dashboard.network.connection_type,
+        system_dashboard.network.signal,
         {
             layout = wibox.layout.align.horizontal,
             system_dashboard.network.download,
             nil,
             system_dashboard.network.upload,
         },
-    }
+        system_dashboard.network.transferred
+    },
+    nil, -- Use default width
+    dpi(180) -- Increased height to fit all information
 )
 
 -- Battery Widget
 system_dashboard.battery = {}
 system_dashboard.battery.icon = wibox.widget {
     markup = "<span foreground='#93c47d'>󰁹</span>", -- Battery icon
-    font = "FontAwesome 18",
+    font = "Nerd Font Mono 16",
     align = "center",
     widget = wibox.widget.textbox,
 }
@@ -390,6 +437,186 @@ system_dashboard.battery.widget = create_widget_container(
     }
 )
 
+-- Create uptime widget
+function create_uptime_widget()
+    local uptime = {}
+    
+    uptime.icon = wibox.widget {
+        markup = "<span foreground='#8e7cc3'>󰅐</span>", -- Uptime icon
+        font = "Nerd Font Mono 16",
+        align = "center",
+        widget = wibox.widget.textbox,
+    }
+    
+    uptime.title = wibox.widget {
+        markup = "<span foreground='#ffffff'>Uptime</span>",
+        font = (beautiful.font or "sans") .. " 12",
+        align = "left",
+        widget = wibox.widget.textbox,
+    }
+    
+    uptime.text = wibox.widget {
+        markup = "<span foreground='#ffffff'>Loading...</span>",
+        font = (beautiful.font or "sans") .. " 10",
+        align = "center",
+        widget = wibox.widget.textbox,
+    }
+    
+    uptime.load = wibox.widget {
+        markup = "<span size='small' foreground='#aaaaaa'>Load: 0.00 0.00 0.00</span>",
+        align = "center",
+        widget = wibox.widget.textbox,
+    }
+    
+    -- Create the uptime widget
+    uptime.widget = create_widget_container(
+        {
+            layout = wibox.layout.fixed.vertical,
+            spacing = dpi(5),
+            {
+                layout = wibox.layout.align.horizontal,
+                uptime.icon,
+                nil,
+                uptime.title,
+            },
+            uptime.text,
+            uptime.load,
+        }
+    )
+    
+    -- Function to update uptime
+    local function update_uptime()
+        -- Get uptime
+        awful.spawn.easy_async_with_shell(
+            "uptime -p && uptime",
+            function(stdout)
+                local uptime_str = stdout:match("up%s+(.-)%s*load")
+                local load1, load5, load15 = stdout:match("load average:%s+([%d%.]+),%s+([%d%.]+),%s+([%d%.]+)")
+                
+                if uptime_str then
+                    uptime.text.markup = string.format(
+                        "<span foreground='#ffffff'>%s</span>", uptime_str
+                    )
+                end
+                
+                if load1 and load5 and load15 then
+                    uptime.load.markup = string.format(
+                        "<span size='small' foreground='#aaaaaa'>Load: %s %s %s</span>", 
+                        load1, load5, load15
+                    )
+                end
+            end
+        )
+    end
+    
+    -- Update uptime initially and set timer
+    update_uptime()
+    gears.timer {
+        timeout = 60,
+        call_now = false,
+        autostart = true,
+        callback = function()
+            if system_dashboard.popup.visible then
+                update_uptime()
+            end
+        end
+    }
+    
+    return uptime.widget
+end
+
+-- Create top processes widget
+function create_top_processes_widget()
+    local top = {}
+    
+    top.icon = wibox.widget {
+        markup = "<span foreground='#cc4125'>󰘚</span>", -- Process icon
+        font = "Nerd Font Mono 16",
+        align = "center",
+        widget = wibox.widget.textbox,
+    }
+    
+    top.title = wibox.widget {
+        markup = "<span foreground='#ffffff'>Top Processes</span>",
+        font = (beautiful.font or "sans") .. " 12",
+        align = "left",
+        widget = wibox.widget.textbox,
+    }
+    
+    -- Create the processes list
+    top.list = wibox.widget {
+        markup = "<span foreground='#aaaaaa'>Loading processes...</span>",
+        font = (beautiful.font or "sans") .. " 9",
+        align = "left",
+        widget = wibox.widget.textbox,
+    }
+    
+    -- Create the top processes widget
+    top.widget = create_widget_container(
+        {
+            layout = wibox.layout.fixed.vertical,
+            spacing = dpi(5),
+            {
+                layout = wibox.layout.align.horizontal,
+                top.icon,
+                nil,
+                top.title,
+            },
+            top.list,
+        }, 
+        nil, -- Use default width
+        dpi(150) -- Taller height for the process list
+    )
+    
+    -- Function to update top processes
+    local function update_top_processes()
+        -- Get top processes
+        awful.spawn.easy_async_with_shell(
+            "ps -eo pmem,pcpu,comm --sort=-pcpu | head -n 6",
+            function(stdout)
+                local process_list = ""
+                local lines = {}
+                
+                for line in stdout:gmatch("[^\r\n]+") do
+                    table.insert(lines, line)
+                end
+                
+                -- Skip the header line
+                for i = 2, #lines do
+                    local mem, cpu, cmd = lines[i]:match("([%d%.]+)%s+([%d%.]+)%s+(.+)")
+                    if mem and cpu and cmd then
+                        -- Truncate command if too long
+                        if #cmd > 20 then
+                            cmd = cmd:sub(1, 17) .. "..."
+                        end
+                        process_list = process_list .. string.format(
+                            "<span foreground='#aaaaaa'>%s</span> <span foreground='#6fa8dc'>%s%%</span> <span foreground='#76a5af'>%s%%</span>\n",
+                            cmd, cpu, mem
+                        )
+                    end
+                end
+                
+                top.list.markup = process_list
+            end
+        )
+    end
+    
+    -- Update processes initially and set timer
+    update_top_processes()
+    gears.timer {
+        timeout = 5,
+        call_now = false,
+        autostart = true,
+        callback = function()
+            if system_dashboard.popup.visible then
+                update_top_processes()
+            end
+        end
+    }
+    
+    return top.widget
+end
+
 -- Create dashboard with all widgets
 system_dashboard.dashboard = wibox.widget {
     layout = wibox.layout.fixed.vertical,
@@ -410,6 +637,12 @@ system_dashboard.dashboard = wibox.widget {
         layout = wibox.layout.flex.horizontal,
         spacing = dpi(10),
         system_dashboard.battery.widget,
+        create_uptime_widget(),
+    },
+    {
+        layout = wibox.layout.flex.horizontal,
+        spacing = dpi(10),
+        create_top_processes_widget(),
     },
 }
 
@@ -532,6 +765,46 @@ local function update_cpu()
             )
         end
     )
+    
+    -- Get CPU frequency
+    awful.spawn.easy_async_with_shell(
+        "cat /proc/cpuinfo | grep 'MHz' | head -1 | awk '{print $4}'",
+        function(stdout)
+            local freq = tonumber(stdout) or 0
+            
+            -- Add frequency information if not already added
+            if not system_dashboard.cpu.freq then
+                system_dashboard.cpu.freq = wibox.widget {
+                    markup = string.format("<span size='small' foreground='#aaaaaa'>%.1f GHz</span>", freq/1000),
+                    align = "center",
+                    widget = wibox.widget.textbox,
+                }
+                
+                -- Add the frequency widget to the CPU widget
+                local cpu_widget_content = system_dashboard.cpu.widget:get_children_by_id("widget_container")[1]
+                if cpu_widget_content then
+                    local layout = wibox.widget {
+                        layout = wibox.layout.align.horizontal,
+                        system_dashboard.cpu.cores,
+                        system_dashboard.cpu.freq,
+                        system_dashboard.cpu.temp,
+                    }
+                    
+                    -- Replace the existing cores/temp row with our new layout
+                    for i, child in ipairs(cpu_widget_content:get_children()) do
+                        if child:get_children()[1] == system_dashboard.cpu.cores then
+                            cpu_widget_content:replace_widget(child, layout)
+                            break
+                        end
+                    end
+                end
+            else
+                system_dashboard.cpu.freq.markup = string.format(
+                    "<span size='small' foreground='#aaaaaa'>%.1f GHz</span>", freq/1000
+                )
+            end
+        end
+    )
 end
 
 local function update_memory()
@@ -586,6 +859,63 @@ local function update_memory()
             end
         end
     )
+    
+    -- Get swap usage
+    awful.spawn.easy_async_with_shell(
+        "free -m | grep 'Swap:' | awk '{print $3, $2, $3/$2 * 100.0}'",
+        function(stdout)
+            local used, total, usage = stdout:match("(%d+)%s+(%d+)%s+(%d+%.?%d*)")
+            
+            used = tonumber(used) or 0
+            total = tonumber(total) or 1
+            
+            -- If there's no swap or it's not being used, handle that case
+            if total == 0 then
+                system_dashboard.memory.swap_used.markup = "<span size='small' foreground='#aaaaaa'>No swap available</span>"
+                system_dashboard.memory.swap_total.markup = ""
+                system_dashboard.memory.swap_progressbar.value = 0
+                return
+            end
+            
+            usage = tonumber(usage) or 0
+            usage = math.floor(usage + 0.5)  -- Round to nearest integer
+            
+            -- Format used swap
+            local used_str
+            if used < 1024 then
+                used_str = string.format("%d MB", used)
+            else
+                used_str = string.format("%.1f GB", used / 1024)
+            end
+            
+            -- Format total swap
+            local total_str
+            if total < 1024 then
+                total_str = string.format("%d MB", total)
+            else
+                total_str = string.format("%.1f GB", total / 1024)
+            end
+            
+            system_dashboard.memory.swap_used.markup = string.format(
+                "<span size='small' foreground='#aaaaaa'>Swap: %s used</span>", used_str
+            )
+            
+            system_dashboard.memory.swap_total.markup = string.format(
+                "<span size='small' foreground='#aaaaaa'>%s total</span>", total_str
+            )
+            
+            system_dashboard.memory.swap_progressbar.value = usage
+            
+            -- Change color based on usage
+            if usage > 80 then
+                system_dashboard.memory.swap_progressbar.color = "#e06c75"  -- Red
+            elseif usage > 50 then
+                system_dashboard.memory.swap_progressbar.color = "#e5c07b"  -- Yellow
+            else
+                system_dashboard.memory.swap_progressbar.color = "#a2c4c9"  -- Light teal
+            end
+        end
+    )
 end
 
 local function update_disk()
@@ -623,6 +953,50 @@ local function update_disk()
             end
         end
     )
+    
+    -- Get disk I/O
+    awful.spawn.easy_async_with_shell(
+        "cat /proc/diskstats | grep 'sd[a-z] ' | head -1 | awk '{print $6, $10}'",
+        function(stdout)
+            local reads, writes = stdout:match("(%d+)%s+(%d+)")
+            
+            reads = tonumber(reads) or 0
+            writes = tonumber(writes) or 0
+            
+            -- Add I/O information if not already added
+            if not system_dashboard.disk.io then
+                system_dashboard.disk.io = wibox.widget {
+                    markup = string.format("<span size='small' foreground='#aaaaaa'>I/O: %dR/%dW</span>", reads, writes),
+                    align = "center",
+                    widget = wibox.widget.textbox,
+                }
+                
+                -- Add the I/O widget to the disk widget
+                local disk_widget_content = system_dashboard.disk.widget:get_children_by_id("widget_container")[1]
+                if disk_widget_content then
+                    -- Add after the progressbar
+                    local layout = wibox.widget {
+                        layout = wibox.layout.align.horizontal,
+                        nil,
+                        system_dashboard.disk.io,
+                        nil,
+                    }
+                    
+                    -- Insert after progressbar
+                    for i, child in ipairs(disk_widget_content:get_children()) do
+                        if child == system_dashboard.disk.progressbar then
+                            table.insert(disk_widget_content:get_children(), i+1, layout)
+                            break
+                        end
+                    end
+                end
+            else
+                system_dashboard.disk.io.markup = string.format(
+                    "<span size='small' foreground='#aaaaaa'>I/O: %dR/%dW</span>", reads, writes
+                )
+            end
+        end
+    )
 end
 
 -- Variables to store previous network stats
@@ -652,11 +1026,139 @@ local function update_network()
                 system_dashboard.network.interface.markup = "<span foreground='#ffffff'>Not connected</span>"
                 system_dashboard.network.download.markup = "<span size='small' foreground='#aaaaaa'>↓ 0 KB/s</span>"
                 system_dashboard.network.upload.markup = "<span size='small' foreground='#aaaaaa'>↑ 0 KB/s</span>"
+                
+                -- Update IP if we've added it
+                if system_dashboard.network.ip then
+                    system_dashboard.network.ip.markup = "<span size='small' foreground='#aaaaaa'>IP: None</span>"
+                end
+                
+                system_dashboard.network.connection_type.markup = "<span size='small' foreground='#aaaaaa'>Type: Not connected</span>"
+                system_dashboard.network.signal.markup = "<span size='small' foreground='#aaaaaa'>Signal: N/A</span>"
+                system_dashboard.network.transferred.markup = "<span size='small' foreground='#aaaaaa'>TX: 0B | RX: 0B</span>"
+                
                 return
             end
             
             system_dashboard.network.interface.markup = string.format(
                 "<span foreground='#ffffff'>%s</span>", interface
+            )
+            
+            -- Get IP address
+            awful.spawn.easy_async_with_shell(
+                string.format("ip addr show %s | grep 'inet ' | awk '{print $2}' | cut -d/ -f1", interface),
+                function(ip_stdout)
+                    local ip = ip_stdout:gsub("%s+", "")
+                    
+                    -- Add IP information if not already added
+                    if not system_dashboard.network.ip then
+                        system_dashboard.network.ip = wibox.widget {
+                            markup = string.format("<span size='small' foreground='#aaaaaa'>IP: %s</span>", ip),
+                            align = "center",
+                            widget = wibox.widget.textbox,
+                        }
+                        
+                        -- Add the IP widget to the network widget
+                        local network_widget_content = system_dashboard.network.widget:get_children_by_id("widget_container")[1]
+                        if network_widget_content then
+                            -- Create a new layout with the IP address
+                            local layout = wibox.widget {
+                                layout = wibox.layout.align.horizontal,
+                                nil,
+                                system_dashboard.network.ip,
+                                nil,
+                            }
+                            
+                            -- Insert after interface name
+                            for i, child in ipairs(network_widget_content:get_children()) do
+                                if child:get_children()[3] == system_dashboard.network.interface then
+                                    table.insert(network_widget_content:get_children(), i+1, layout)
+                                    break
+                                end
+                            end
+                        end
+                    else
+                        system_dashboard.network.ip.markup = string.format(
+                            "<span size='small' foreground='#aaaaaa'>IP: %s</span>", ip
+                        )
+                    end
+                    
+                    -- Check if it's a wireless interface and get SSID
+                    awful.spawn.easy_async_with_shell(
+                        string.format("iwconfig %s 2>/dev/null | grep ESSID | cut -d: -f2", interface),
+                        function(ssid_stdout)
+                            local ssid = ssid_stdout:gsub("[%s\"]+", "")
+                            
+                            if ssid ~= "" then
+                                -- Add SSID information if not already added
+                                if not system_dashboard.network.ssid then
+                                    system_dashboard.network.ssid = wibox.widget {
+                                        markup = string.format("<span size='small' foreground='#aaaaaa'>SSID: %s</span>", ssid),
+                                        align = "center",
+                                        widget = wibox.widget.textbox,
+                                    }
+                                    
+                                    -- Add the SSID widget to the network widget
+                                    local network_widget_content = system_dashboard.network.widget:get_children_by_id("widget_container")[1]
+                                    if network_widget_content then
+                                        -- Create a new layout with the SSID
+                                        local layout = wibox.widget {
+                                            layout = wibox.layout.align.horizontal,
+                                            nil,
+                                            system_dashboard.network.ssid,
+                                            nil,
+                                        }
+                                        
+                                        -- Insert after IP
+                                        for i, child in ipairs(network_widget_content:get_children()) do
+                                            if system_dashboard.network.ip and child:get_children()[2] == system_dashboard.network.ip then
+                                                table.insert(network_widget_content:get_children(), i+1, layout)
+                                                break
+                                            end
+                                        end
+                                    end
+                                else
+                                    system_dashboard.network.ssid.markup = string.format(
+                                        "<span size='small' foreground='#aaaaaa'>SSID: %s</span>", ssid
+                                    )
+                                end
+                            end
+                        end
+                    )
+                end
+            )
+            
+            -- Determine connection type (wired/wireless)
+            awful.spawn.easy_async_with_shell(
+                string.format("[ -d /sys/class/net/%s/wireless ] && echo wireless || echo wired", interface),
+                function(conn_type)
+                    local connection_type = conn_type:gsub("%s+", "")
+                    system_dashboard.network.connection_type.markup = string.format(
+                        "<span size='small' foreground='#aaaaaa'>Type: %s</span>", 
+                        connection_type:gsub("^%l", string.upper) -- Capitalize first letter
+                    )
+                    
+                    -- If wireless, get signal strength
+                    if connection_type == "wireless" then
+                        awful.spawn.easy_async_with_shell(
+                            string.format("iwconfig %s 2>/dev/null | grep 'Link Quality' | awk -F= '{print $2}' | awk '{print $1}'", interface),
+                            function(quality_stdout)
+                                local quality = quality_stdout:gsub("%s+", "")
+                                local current, max = quality:match("(%d+)/(%d+)")
+                                
+                                if current and max then
+                                    local signal_percent = math.floor((tonumber(current) / tonumber(max)) * 100 + 0.5)
+                                    system_dashboard.network.signal.markup = string.format(
+                                        "<span size='small' foreground='#aaaaaa'>Signal: %d%%</span>", signal_percent
+                                    )
+                                else
+                                    system_dashboard.network.signal.markup = "<span size='small' foreground='#aaaaaa'>Signal: Unknown</span>"
+                                end
+                            end
+                        )
+                    else
+                        system_dashboard.network.signal.markup = "<span size='small' foreground='#aaaaaa'>Signal: N/A (wired)</span>"
+                    end
+                end
             )
             
             -- Get network traffic for this interface
@@ -790,6 +1292,9 @@ local function update_battery()
     end)
 end
 
+-- Call the update icon fonts function when initialized
+-- update_icon_fonts()
+
 -- Function to toggle dashboard visibility
 function system_dashboard.toggle()
     if system_dashboard.popup.visible then
@@ -822,5 +1327,23 @@ gears.timer {
         end
     end
 }
+
+-- Make sure nerd font is installed if not already
+gears.timer.start_new(1, function()
+    awful.spawn.easy_async_with_shell("fc-list | grep -i 'nerd'", function(stdout)
+        if stdout == "" then
+            -- Nerd Font not found, notify user and attempt to install
+            naughty.notify({
+                title = "System Dashboard",
+                text = "Nerd Font not detected. Trying to run font install script...",
+                timeout = 10
+            })
+            
+            -- Try to run the install script
+            awful.spawn.with_shell("~/.config/awesome/install_nerdfonts.sh")
+        end
+    end)
+    return false  -- Don't repeat the timer
+end)
 
 return system_dashboard 
