@@ -18,17 +18,13 @@ local wibox         = require("wibox")
 local beautiful     = require("beautiful")
 local naughty       = require("naughty")
 local lain          = require("lain")
-local menubar       = require("menubar")
+-- local menubar       = require("menubar")
 local freedesktop   = require("freedesktop")
-local hotkeys_popup = require("awful.hotkeys_popup").widget
+local hotkeys_popup = require("awful.hotkeys_popup")
+-- local cyclefocus = require('cyclefocus')
 require("awful.hotkeys_popup.keys")
 local mytable       = awful.util.table or gears.table -- 4.{0,1} compatibility
 local dpi           = require("beautiful.xresources").apply_dpi
-
--- Load notification center module
-local notification_center = require("modules.notification_center")
--- Make notification center globally available
-_G.notification_center = notification_center
 
 -- }}}
 
@@ -256,14 +252,6 @@ awful.util.taglist_buttons = mytable.join(
 
 beautiful.init(string.format("%s/.config/awesome/themes/%s/theme.lua", os.getenv("HOME"), chosen_theme))
 
--- Initialize notification center
-notification_center.init({
-    width = dpi(400),
-    max_notifications = 100,
-    position = "right",
-    keybinding = { modkey = "Mod4", key = "n" }
-})
-
 -- Create a custom system monitor widget
 local system_monitor = {}
 
@@ -489,7 +477,7 @@ end)
 --]]
 
 -- Set the Menubar terminal for applications that require it
-menubar.utils.terminal = terminal
+--menubar.utils.terminal = terminal
 
 -- }}}
 
@@ -521,48 +509,7 @@ screen.connect_signal("arrange", function (s)
 end)
 
 -- Create a wibox for each screen and add it
-awful.screen.connect_for_each_screen(function(s)
-    beautiful.at_screen_connect(s)
-
-    -- Create a promptbox for each screen
-    s.mypromptbox = awful.widget.prompt()
-    -- Create an imagebox widget which will contain an icon indicating which layout we're using.
-    -- We need one layoutbox per screen.
-    s.mylayoutbox = awful.widget.layoutbox(s)
-    s.mylayoutbox:buttons(gears.table.join(
-                           awful.button({ }, 1, function () awful.layout.inc( 1) end),
-                           awful.button({ }, 3, function () awful.layout.inc(-1) end),
-                           awful.button({ }, 4, function () awful.layout.inc( 1) end),
-                           awful.button({ }, 5, function () awful.layout.inc(-1) end)))
-    -- Create a taglist widget
-    s.mytaglist = awful.widget.taglist(s, awful.widget.taglist.filter.all, taglist_buttons)
-
-    -- Create a tasklist widget
-    s.mytasklist = awful.widget.tasklist(s, awful.widget.tasklist.filter.currenttags, tasklist_buttons)
-
-    -- Create the wibox
-    s.mywibox = awful.wibar({ position = "top", screen = s })
-
-    -- Add widgets to the wibox
-    s.mywibox:setup {
-        layout = wibox.layout.align.horizontal,
-        { -- Left widgets
-            layout = wibox.layout.fixed.horizontal,
-            mylauncher,
-            s.mytaglist,
-            s.mypromptbox,
-        },
-        s.mytasklist, -- Middle widget
-        { -- Right widgets
-            layout = wibox.layout.fixed.horizontal,
-            mykeyboardlayout,
-            wibox.widget.systray(),
-            notification_center.create_button(), -- Add notification center button
-            mytextclock,
-            s.mylayoutbox,
-        },
-    }
-end)
+awful.screen.connect_for_each_screen(function(s) beautiful.at_screen_connect(s) end)
 
 -- }}}
 

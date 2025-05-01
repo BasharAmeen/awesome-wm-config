@@ -614,12 +614,6 @@ local spr     = wibox.widget.textbox(' ')
 local arrl_dl = separators.arrow_left(theme.bg_focus, "alpha")
 local arrl_ld = separators.arrow_left("alpha", theme.bg_focus)
 
--- Add notification center button (will be available after initialization)
-local notification_center_button = nil
-if _G.notification_center and _G.notification_center.create_button then
-    notification_center_button = _G.notification_center.create_button()
-end
-
 -- Helper function for creating consistent rounded containers with glass effect
 function theme.create_widget_container(widget, args)
     args = args or {}
@@ -1076,7 +1070,7 @@ function theme.at_screen_connect(s)
     -- Style the CPU widget
     local cpu_widget = wibox.widget {
         {
-            {
+                {
                 text = " ",  -- Icon: microchip
                     font = "FontAwesome 11",
                     widget = wibox.widget.textbox,
@@ -1097,7 +1091,7 @@ function theme.at_screen_connect(s)
     -- Style the memory widget
     local mem_widget = wibox.widget {
         {
-            {
+                {
                 text = " ",  -- Icon: memory
                     font = "FontAwesome 11",
                     widget = wibox.widget.textbox,
@@ -1152,7 +1146,7 @@ function theme.at_screen_connect(s)
     -- Create styled keyboardlayout widget
     local kbd_widget = wibox.widget {
         {
-            {
+                {
                 text = " ",  -- Icon: keyboard
                     font = "FontAwesome 11",
                     widget = wibox.widget.textbox,
@@ -1209,14 +1203,6 @@ function theme.at_screen_connect(s)
         {systray_toggle_with_border, systray_container},
         {spacing = dpi(2)}
     )
-    
-    -- Add notification center button to groups if available
-    if notification_center_button then
-        time_group = theme.create_widget_group(
-            {notification_center_button, styled_clock, layoutbox_container},
-            {spacing = dpi(6)}
-        )
-    end
     
     -- Add widgets to the wibox
     s.mywibox:setup {
