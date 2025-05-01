@@ -252,6 +252,11 @@ awful.util.taglist_buttons = mytable.join(
 
 beautiful.init(string.format("%s/.config/awesome/themes/%s/theme.lua", os.getenv("HOME"), chosen_theme))
 
+-- Load custom modules after theme initialization
+local system_dashboard = require("modules.widgets.system_dashboard")
+local smart_layout = require("modules.smart_layout")
+-- local window_grouping = require("modules.window_grouping")
+
 -- Create a custom system monitor widget
 local system_monitor = {}
 
@@ -1187,8 +1192,18 @@ globalkeys = mytable.join(
             text = "Toggling dark theme for all applications",
             timeout = 2
         })
-    end, {description = "toggle dark theme", group = "awesome"})
+    end, {description = "toggle dark theme", group = "awesome"}),
+
+    -- Toggle system dashboard
+    awful.key({ modkey, "Control" }, "d", function() system_dashboard.toggle() end,
+              {description = "toggle system dashboard", group = "mine"})
 )
+
+-- Append window grouping keybindings
+-- local window_group_keys = window_grouping.get_group_keybindings({"Mod4", "Control"}, "g")
+-- for _, key in ipairs(window_group_keys) do
+--     globalkeys = gears.table.join(globalkeys, key)
+-- end
 
 clientkeys = mytable.join(
     awful.key({ altkey, "Shift"   }, "m",      lain.util.magnify_client,
@@ -1495,6 +1510,12 @@ tag.connect_signal("property::selected", backham)
 -- Apply dark theme
 local dark_theme = require("modules.autostart.dark-theme")
 dark_theme.init()
+
+-- Initialize smart layout switching
+-- smart_layout.init()
+
+-- Initialize window grouping 
+-- window_grouping.init()
 
 -- Configure and start picom for visual effects
 awful.spawn.easy_async_with_shell("pgrep picom", function(stdout)
