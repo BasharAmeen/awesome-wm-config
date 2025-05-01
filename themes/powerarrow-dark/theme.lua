@@ -95,16 +95,11 @@ local keyboardlayout = awful.widget.keyboardlayout:new()
 
 -- Textclock
 local clockicon = wibox.widget.imagebox(theme.widget_clock)
-local clock = awful.widget.watch(
-    "date +'%a %d %b %R'", 60,
-    function(widget, stdout)
-        widget:set_markup(" " .. markup.font(theme.font, stdout))
-    end
-)
+local textclock = wibox.widget.textclock(" %a %d %b %R ")
 
 -- Calendar
 theme.cal = lain.widget.cal({
-    attach_to = { clock },
+    attach_to = { textclock },
     notification_preset = {
         font = "Terminus 10",
         fg   = theme.fg_normal,
@@ -280,7 +275,14 @@ local net = lain.widget.net({
     end
 })
 net.widget = net_widget
- 
+
+-- Initialize systray animation variables
+local systray_original_width = dpi(200) -- Approximate default width
+local systray_anim_duration = 0.3 -- Animation duration in seconds
+local systray_anim_steps = 20
+local systray_anim_step_time = systray_anim_duration / systray_anim_steps
+local systray_slide_timer = nil
+local bounce_timer = nil
 
 -- Create the system tray widget
 local systray = wibox.widget.systray()
@@ -300,43 +302,309 @@ local systray_container = wibox.container.margin(
 )
 systray_container.shape = function(cr, w, h) gears.shape.rounded_rect(cr, w, h, 6) end -- More rounded corners
 
--- Create the arrow widget to toggle system tray
+-- Create styled system tray with toggle button
 local systray_toggle = wibox.widget {
     {
         {
-            id = "icon",
-            text = "◀", -- Using a left arrow Unicode character
-            font = "Monospace 11, FontAwesome 11", -- Add fallback fonts
-            widget = wibox.widget.textbox,
+            {
+                id = "icon",
+                -- Use a nicer-looking icon 
+                text = "󰀻", -- Using a Nerd Font app tray icon (fallback to alternative if not available)
+                font = "Symbols Nerd Font 18",
+                align = "center",
+                valign = "center",
+                widget = wibox.widget.textbox,
+            },
+            id = "icon_margin",
+            left = dpi(8),
+            right = dpi(8),
+            top = dpi(6),
+            bottom = dpi(6),
+            widget = wibox.container.margin
         },
-        margins = 4,
-        widget = wibox.container.margin
+        id = "icon_container",
+        shape = function(cr, w, h) gears.shape.rounded_rect(cr, w, h, dpi(6)) end,
+        bg = {
+            type = "linear",
+            from = { 0, 0 },
+            to = { 0, dpi(40) },
+            stops = { 
+                { 0, theme.bg_focus .. "90" },
+                { 1, theme.bg_focus .. "60" } 
+            }
+        },
+        widget = wibox.container.background
     },
-    bg = (theme.bg_focus or "#535d6c") .. "50",
-    fg = theme.fg_focus or "#ffffff",
-    shape = function(cr, w, h) gears.shape.rounded_rect(cr, w, h, 6) end,
-    widget = wibox.container.background,
+    -- Add a subtle border glow
+    shape = function(cr, w, h) gears.shape.rounded_rect(cr, w, h, dpi(6)) end,
+    border_width = dpi(1),
+    border_color = theme.fg_focus .. "30",
+    widget = wibox.container.background
 }
 
--- Add hover effect to systray toggle
-systray_toggle:connect_signal("mouse::enter", function(w)
-    w.bg = (theme.bg_focus or "#535d6c") .. "90" -- Brighter on hover
-end)
-systray_toggle:connect_signal("mouse::leave", function(w)
-    w.bg = (theme.bg_focus or "#535d6c") .. "50" -- Back to normal when mouse leaves
+-- Add a subtle border glow
+local systray_toggle_with_border = wibox.widget {
+    systray_toggle,
+    shape = function(cr, w, h) gears.shape.rounded_rect(cr, w, h, dpi(6)) end,
+    border_width = dpi(1),
+    border_color = theme.fg_focus .. "30",
+    widget = wibox.container.background
+}
+
+-- Add tooltip to explain functionality
+local systray_tooltip = awful.tooltip({
+    objects = {systray_toggle_with_border},
+    text = "Toggle system tray visibility",
+    delay_show = 0.5,
+    margin_leftright = dpi(8),
+    margin_topbottom = dpi(6),
+    mode = "outside",
+    preferred_positions = {"bottom", "top", "right", "left"},
+    font = theme.font,
+    bg = theme.bg_focus .. "90",
+    border_width = dpi(1),
+    border_color = theme.fg_focus .. "40",
+})
+
+-- Make sure we have a fallback for the icon if Nerd Fonts aren't available
+awful.spawn.easy_async_with_shell("fc-list | grep -i 'nerd\\|awesome'", function(stdout)
+    local has_special_fonts = stdout ~= ""
+    local icon_widget = systray_toggle:get_children_by_id("icon")[1]
+    
+    if not has_special_fonts then
+        -- Fallback to a standard icon if Nerd Fonts aren't available
+        icon_widget.text = "☰" -- A nice fallback icon that should work in most fonts
+        icon_widget.font = "sans 16"
+    end
 end)
 
--- Add button functionality to toggle system tray
-systray_toggle:buttons(awful.util.table.join(
+-- Enhance the hover effect with animation
+local icon_opacity = 0.9
+local hover_timer = nil
+
+systray_toggle:connect_signal("mouse::enter", function(w)
+    -- Stop any existing animation
+    if hover_timer then
+        hover_timer:stop()
+    end
+    
+    -- Create smooth glow animation
+    icon_opacity = 0.9
+    hover_timer = gears.timer {
+        timeout = 0.05,
+        call_now = true,
+        autostart = true,
+        callback = function(t)
+            icon_opacity = icon_opacity + 0.05
+            if icon_opacity >= 1.0 then
+                t:stop()
+                icon_opacity = 1.0
+            end
+            
+            -- Update the widget appearance with glow effect
+            local icon_container = systray_toggle:get_children_by_id("icon_container")[1]
+            icon_container.bg = {
+                type = "linear",
+                from = { 0, 0 },
+                to = { 0, dpi(40) },
+                stops = { 
+                    { 0, theme.fg_focus .. "40" },
+                    { 1, theme.bg_focus .. "90" } 
+                }
+            }
+            
+            -- Add glow to text
+            local icon = systray_toggle:get_children_by_id("icon")[1]
+            icon.markup = "<span foreground='" .. theme.fg_focus .. "'>" .. 
+                          (icon.text and icon.text or "☰") .. "</span>"
+            
+            -- Update border glow
+            w.border_color = theme.fg_focus .. "60"
+        end
+    }
+end)
+
+systray_toggle:connect_signal("mouse::leave", function(w)
+    -- Stop any existing animation
+    if hover_timer then
+        hover_timer:stop()
+    end
+    
+    -- Create smooth fade-out animation
+    icon_opacity = 1.0
+    hover_timer = gears.timer {
+        timeout = 0.05,
+        call_now = true,
+        autostart = true,
+        callback = function(t)
+            icon_opacity = icon_opacity - 0.05
+            if icon_opacity <= 0.9 then
+                t:stop()
+                icon_opacity = 0.9
+            end
+            
+            -- Restore original appearance
+            local icon_container = systray_toggle:get_children_by_id("icon_container")[1]
+            icon_container.bg = {
+                type = "linear",
+                from = { 0, 0 },
+                to = { 0, dpi(40) },
+                stops = { 
+                    { 0, theme.bg_focus .. "90" },
+                    { 1, theme.bg_focus .. "60" } 
+                }
+            }
+            
+            -- Restore original text
+            local icon = systray_toggle:get_children_by_id("icon")[1]
+            icon.markup = "<span foreground='" .. theme.fg_normal .. "'>" ..
+                          (icon.text and icon.text or "☰") .. "</span>"
+            
+            -- Restore border
+            w.border_color = theme.fg_focus .. "30"
+        end
+    }
+end)
+
+-- Toggle functionality
+local is_open = true
+systray_toggle_with_border:buttons(my_table.join(
     awful.button({}, 1, function()
-        if systray.visible then
-            -- If the system tray is visible, hide it
-            systray.visible = false
-            systray_toggle:get_children_by_id("icon")[1].text = "▶" -- Right arrow
-        else
-            -- If the system tray is hidden, show it
+        -- Stop any existing animation
+        if systray_slide_timer then
+            systray_slide_timer:stop()
+        end
+        
+        is_open = not is_open
+        local icon = systray_toggle:get_children_by_id("icon")[1]
+        
+        -- Get the current width of the systray container
+        local current_width = systray_container.forced_width or systray_original_width
+        
+        if is_open then
+            -- Show open icon
+            if icon.text == "󰀻" then
+                icon.text = "󰀻" -- Keep Nerd Font icon if available
+            else
+                icon.text = "☰" -- Fallback
+            end
+            
+            -- Show and animate systray expanding
             systray.visible = true
-            systray_toggle:get_children_by_id("icon")[1].text = "◀" -- Left arrow
+            systray_container.forced_width = 0
+            
+            local step = 0
+            systray_slide_timer = gears.timer {
+                timeout = systray_anim_step_time,
+                call_now = true,
+                autostart = true,
+                callback = function(t)
+                    step = step + 1
+                    -- Use easing function for smoother animation
+                    local progress = step / systray_anim_steps
+                    local eased_progress = progress * (2 - progress) -- Ease out quad
+                    
+                    systray_container.forced_width = math.floor(systray_original_width * eased_progress)
+                    
+                    if step >= systray_anim_steps then
+                        -- Add a small bounce effect at the end
+                        if not bounce_timer then
+                            local bounce_step = 0
+                            local bounce_steps = 5
+                            local bounce_amount = systray_original_width * 0.02 -- 2% bounce
+                            
+                            bounce_timer = gears.timer {
+                                timeout = 0.02,
+                                call_now = true,
+                                autostart = true,
+                                callback = function(bt)
+                                    bounce_step = bounce_step + 1
+                                    local bounce_progress = bounce_step / bounce_steps
+                                    
+                                    -- Sine wave for bounce: starts at 0, peaks at PI/2, returns to 0 at PI
+                                    local bounce_factor = math.sin(bounce_progress * math.pi)
+                                    local width_adjust = bounce_amount * bounce_factor
+                                    
+                                    systray_container.forced_width = systray_original_width + width_adjust
+                                    
+                                    if bounce_step >= bounce_steps then
+                                        systray_container.forced_width = systray_original_width
+                                        bt:stop()
+                                        bounce_timer = nil
+                                    end
+                                end
+                            }
+                        end
+                        t:stop()
+                    end
+                end
+            }
+        else
+            -- Show closed icon
+            if icon.text == "󰀻" then
+                icon.text = "󰅁" -- Use Nerd Font alternative icon
+            else
+                icon.text = "✕" -- Fallback
+            end
+            
+            -- Animate systray collapsing
+            local step = 0
+            local start_width = systray_container.forced_width or systray_original_width
+            
+            systray_slide_timer = gears.timer {
+                timeout = systray_anim_step_time,
+                call_now = true,
+                autostart = true,
+                callback = function(t)
+                    step = step + 1
+                    -- Use easing function for smoother animation
+                    local progress = step / systray_anim_steps
+                    local eased_progress = progress * (2 - progress) -- Ease out quad
+                    
+                    systray_container.forced_width = math.floor(start_width * (1 - eased_progress))
+                    
+                    if step >= systray_anim_steps then
+                        -- Add a small bounce effect at the end for the toggle button
+                        if not bounce_timer then
+                            local bounce_step = 0
+                            local bounce_steps = 5
+                            
+                            bounce_timer = gears.timer {
+                                timeout = 0.02,
+                                call_now = true,
+                                autostart = true,
+                                callback = function(bt)
+                                    bounce_step = bounce_step + 1
+                                    local bounce_progress = bounce_step / bounce_steps
+                                    
+                                    -- Small scale animation for the icon
+                                    local icon_margin = systray_toggle:get_children_by_id("icon_margin")[1]
+                                    local bounce_factor = math.sin(bounce_progress * math.pi)
+                                    local scale = 1 - (bounce_factor * 0.1) -- Small 10% scale down and up
+                                    
+                                    icon_margin.left = dpi(8 * scale)
+                                    icon_margin.right = dpi(8 * scale)
+                                    icon_margin.top = dpi(6 * scale)
+                                    icon_margin.bottom = dpi(6 * scale)
+                                    
+                                    if bounce_step >= bounce_steps then
+                                        icon_margin.left = dpi(8)
+                                        icon_margin.right = dpi(8)
+                                        icon_margin.top = dpi(6)
+                                        icon_margin.bottom = dpi(6)
+                                        bt:stop()
+                                        bounce_timer = nil
+                                    end
+                                end
+                            }
+                        end
+                        
+                        systray_container.forced_width = 0
+                        systray.visible = false -- Hide after animation completes
+                        t:stop()
+                    end
+                end
+            }
         end
     end)
 ))
@@ -465,39 +733,302 @@ function theme.at_screen_connect(s)
         padding = {left = dpi(10), right = dpi(10), top = dpi(3), bottom = dpi(3)}
     })
     
+    -- Create a beautiful toggle button with gradient and icon
     local systray_toggle = wibox.widget {
         {
             {
                 id = "icon",
-                text = " ",  -- Icon: chevron-left
-                font = "FontAwesome 11",
+                -- Use a nicer-looking icon 
+                text = "󰀻", -- Using a Nerd Font app tray icon (fallback to alternative if not available)
+                font = "Symbols Nerd Font 18",
+                align = "center",
+                valign = "center",
                 widget = wibox.widget.textbox,
             },
+            id = "icon_margin",
+            left = dpi(8),
+            right = dpi(8),
+            top = dpi(6),
+            bottom = dpi(6),
             widget = wibox.container.margin
         },
-        bg = theme.bg_focus .. "60",
-        fg = theme.fg_focus,
+        id = "icon_container",
         shape = function(cr, w, h) gears.shape.rounded_rect(cr, w, h, dpi(6)) end,
-        widget = wibox.container.background,
+        bg = {
+            type = "linear",
+            from = { 0, 0 },
+            to = { 0, dpi(40) },
+            stops = { 
+                { 0, theme.bg_focus .. "90" },
+                { 1, theme.bg_focus .. "60" } 
+            }
+        },
+        widget = wibox.container.background
     }
     
-    -- Add hover effect
-    systray_toggle:connect_signal("mouse::enter", function(w)
-        w.bg = theme.bg_focus .. "90"
+    -- Add a subtle border glow
+    local systray_toggle_with_border = wibox.widget {
+        systray_toggle,
+        shape = function(cr, w, h) gears.shape.rounded_rect(cr, w, h, dpi(6)) end,
+        border_width = dpi(1),
+        border_color = theme.fg_focus .. "30",
+        widget = wibox.container.background
+    }
+    
+    -- Add tooltip to explain functionality
+    local systray_tooltip = awful.tooltip({
+        objects = {systray_toggle_with_border},
+        text = "Toggle system tray visibility",
+        delay_show = 0.5,
+        margin_leftright = dpi(8),
+        margin_topbottom = dpi(6),
+        mode = "outside",
+        preferred_positions = {"bottom", "top", "right", "left"},
+        font = theme.font,
+        bg = theme.bg_focus .. "90",
+        border_width = dpi(1),
+        border_color = theme.fg_focus .. "40",
+    })
+    
+    -- Make sure we have a fallback for the icon if Nerd Fonts aren't available
+    awful.spawn.easy_async_with_shell("fc-list | grep -i 'nerd\\|awesome'", function(stdout)
+        local has_special_fonts = stdout ~= ""
+        local icon_widget = systray_toggle:get_children_by_id("icon")[1]
+        
+        if not has_special_fonts then
+            -- Fallback to a standard icon if Nerd Fonts aren't available
+            icon_widget.text = "☰" -- A nice fallback icon that should work in most fonts
+            icon_widget.font = "sans 16"
+        end
     end)
-    systray_toggle:connect_signal("mouse::leave", function(w)
-        w.bg = theme.bg_focus .. "60"
+    
+    -- Enhance the hover effect with animation
+    local icon_opacity = 0.9
+    local hover_timer = nil
+    
+    systray_toggle_with_border:connect_signal("mouse::enter", function(w)
+        -- Stop any existing animation
+        if hover_timer then
+            hover_timer:stop()
+        end
+        
+        -- Create smooth glow animation
+        icon_opacity = 0.9
+        hover_timer = gears.timer {
+            timeout = 0.05,
+            call_now = true,
+            autostart = true,
+            callback = function(t)
+                icon_opacity = icon_opacity + 0.05
+                if icon_opacity >= 1.0 then
+                    t:stop()
+                    icon_opacity = 1.0
+                end
+                
+                -- Update the widget appearance with glow effect
+                local icon_container = systray_toggle:get_children_by_id("icon_container")[1]
+                icon_container.bg = {
+                    type = "linear",
+                    from = { 0, 0 },
+                    to = { 0, dpi(40) },
+                    stops = { 
+                        { 0, theme.fg_focus .. "40" },
+                        { 1, theme.bg_focus .. "90" } 
+                    }
+                }
+                
+                -- Add glow to text
+                local icon = systray_toggle:get_children_by_id("icon")[1]
+                icon.markup = "<span foreground='" .. theme.fg_focus .. "'>" .. 
+                              (icon.text and icon.text or "☰") .. "</span>"
+                
+                -- Update border glow
+                w.border_color = theme.fg_focus .. "60"
+            end
+        }
+    end)
+    
+    systray_toggle_with_border:connect_signal("mouse::leave", function(w)
+        -- Stop any existing animation
+        if hover_timer then
+            hover_timer:stop()
+        end
+        
+        -- Create smooth fade-out animation
+        icon_opacity = 1.0
+        hover_timer = gears.timer {
+            timeout = 0.05,
+            call_now = true,
+            autostart = true,
+            callback = function(t)
+                icon_opacity = icon_opacity - 0.05
+                if icon_opacity <= 0.9 then
+                    t:stop()
+                    icon_opacity = 0.9
+                end
+                
+                -- Restore original appearance
+                local icon_container = systray_toggle:get_children_by_id("icon_container")[1]
+                icon_container.bg = {
+                    type = "linear",
+                    from = { 0, 0 },
+                    to = { 0, dpi(40) },
+                    stops = { 
+                        { 0, theme.bg_focus .. "90" },
+                        { 1, theme.bg_focus .. "60" } 
+                    }
+                }
+                
+                -- Restore original text
+                local icon = systray_toggle:get_children_by_id("icon")[1]
+                icon.markup = "<span foreground='" .. theme.fg_normal .. "'>" ..
+                              (icon.text and icon.text or "☰") .. "</span>"
+                
+                -- Restore border
+                w.border_color = theme.fg_focus .. "30"
+            end
+        }
     end)
     
     -- Toggle functionality
-    systray_toggle:buttons(my_table.join(
+    local is_open = true
+    systray_toggle_with_border:buttons(my_table.join(
         awful.button({}, 1, function()
-            if systray.visible then
-                systray.visible = false
-                systray_toggle:get_children_by_id("icon")[1].text = " "  -- Right arrow
-            else
+            -- Stop any existing animation
+            if systray_slide_timer then
+                systray_slide_timer:stop()
+            end
+            
+            is_open = not is_open
+            local icon = systray_toggle:get_children_by_id("icon")[1]
+            
+            -- Get the current width of the systray container
+            local current_width = systray_container.forced_width or systray_original_width
+            
+            if is_open then
+                -- Show open icon
+                if icon.text == "󰀻" then
+                    icon.text = "󰀻" -- Keep Nerd Font icon if available
+                else
+                    icon.text = "☰" -- Fallback
+                end
+                
+                -- Show and animate systray expanding
                 systray.visible = true
-                systray_toggle:get_children_by_id("icon")[1].text = " "  -- Left arrow
+                systray_container.forced_width = 0
+                
+                local step = 0
+                systray_slide_timer = gears.timer {
+                    timeout = systray_anim_step_time,
+                    call_now = true,
+                    autostart = true,
+                    callback = function(t)
+                        step = step + 1
+                        -- Use easing function for smoother animation
+                        local progress = step / systray_anim_steps
+                        local eased_progress = progress * (2 - progress) -- Ease out quad
+                        
+                        systray_container.forced_width = math.floor(systray_original_width * eased_progress)
+                        
+                        if step >= systray_anim_steps then
+                            -- Add a small bounce effect at the end
+                            if not bounce_timer then
+                                local bounce_step = 0
+                                local bounce_steps = 5
+                                local bounce_amount = systray_original_width * 0.02 -- 2% bounce
+                                
+                                bounce_timer = gears.timer {
+                                    timeout = 0.02,
+                                    call_now = true,
+                                    autostart = true,
+                                    callback = function(bt)
+                                        bounce_step = bounce_step + 1
+                                        local bounce_progress = bounce_step / bounce_steps
+                                        
+                                        -- Sine wave for bounce: starts at 0, peaks at PI/2, returns to 0 at PI
+                                        local bounce_factor = math.sin(bounce_progress * math.pi)
+                                        local width_adjust = bounce_amount * bounce_factor
+                                        
+                                        systray_container.forced_width = systray_original_width + width_adjust
+                                        
+                                        if bounce_step >= bounce_steps then
+                                            systray_container.forced_width = systray_original_width
+                                            bt:stop()
+                                            bounce_timer = nil
+                                        end
+                                    end
+                                }
+                            end
+                            t:stop()
+                        end
+                    end
+                }
+            else
+                -- Show closed icon
+                if icon.text == "󰀻" then
+                    icon.text = "󰅁" -- Use Nerd Font alternative icon
+                else
+                    icon.text = "✕" -- Fallback
+                end
+                
+                -- Animate systray collapsing
+                local step = 0
+                local start_width = systray_container.forced_width or systray_original_width
+                
+                systray_slide_timer = gears.timer {
+                    timeout = systray_anim_step_time,
+                    call_now = true,
+                    autostart = true,
+                    callback = function(t)
+                        step = step + 1
+                        -- Use easing function for smoother animation
+                        local progress = step / systray_anim_steps
+                        local eased_progress = progress * (2 - progress) -- Ease out quad
+                        
+                        systray_container.forced_width = math.floor(start_width * (1 - eased_progress))
+                        
+                        if step >= systray_anim_steps then
+                            -- Add a small bounce effect at the end for the toggle button
+                            if not bounce_timer then
+                                local bounce_step = 0
+                                local bounce_steps = 5
+                                
+                                bounce_timer = gears.timer {
+                                    timeout = 0.02,
+                                    call_now = true,
+                                    autostart = true,
+                                    callback = function(bt)
+                                        bounce_step = bounce_step + 1
+                                        local bounce_progress = bounce_step / bounce_steps
+                                        
+                                        -- Small scale animation for the icon
+                                        local icon_margin = systray_toggle:get_children_by_id("icon_margin")[1]
+                                        local bounce_factor = math.sin(bounce_progress * math.pi)
+                                        local scale = 1 - (bounce_factor * 0.1) -- Small 10% scale down and up
+                                        
+                                        icon_margin.left = dpi(8 * scale)
+                                        icon_margin.right = dpi(8 * scale)
+                                        icon_margin.top = dpi(6 * scale)
+                                        icon_margin.bottom = dpi(6 * scale)
+                                        
+                                        if bounce_step >= bounce_steps then
+                                            icon_margin.left = dpi(8)
+                                            icon_margin.right = dpi(8)
+                                            icon_margin.top = dpi(6)
+                                            icon_margin.bottom = dpi(6)
+                                            bt:stop()
+                                            bounce_timer = nil
+                                        end
+                                    end
+                                }
+                            end
+                            
+                            systray_container.forced_width = 0
+                            systray.visible = false -- Hide after animation completes
+                            t:stop()
+                        end
+                    end
+                }
             end
         end)
     ))
@@ -509,10 +1040,7 @@ function theme.at_screen_connect(s)
             font = "FontAwesome 11",
             widget = wibox.widget.textbox,
         },
-        {
-            format = "%a %d %b %H:%M",
-            widget = wibox.widget.textclock
-        },
+        textclock,  -- Use the textclock widget that the calendar is attached to
         spacing = dpi(4),
         layout = wibox.layout.fixed.horizontal
     }
@@ -672,7 +1200,7 @@ function theme.at_screen_connect(s)
     )
     
     local systray_group = theme.create_widget_group(
-        {systray_toggle, systray_container},
+        {systray_toggle_with_border, systray_container},
         {spacing = dpi(2)}
     )
     
