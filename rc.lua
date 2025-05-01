@@ -236,6 +236,8 @@ lain.layout.cascade.tile.extra_padding = 5
 lain.layout.cascade.tile.nmaster       = 5
 lain.layout.cascade.tile.ncol          = 2
 
+-- Enhanced taglist with larger font and better styling
+local taglist_square_size = dpi(5)
 awful.util.taglist_buttons = mytable.join(
  
     awful.button({ }, 1, function(t) t:view_only() end),
@@ -786,9 +788,9 @@ show_progressbar = show_volume_popup
 local wibox_opacity = "90" -- More transparency for glass effect (90 = ~35% opacity)
 
 -- Apply transparency to wiboxes created by beautiful
-local old_at_screen_connect = beautiful.at_screen_connect
+local original_at_screen_connect = beautiful.at_screen_connect
 beautiful.at_screen_connect = function(s)
-    old_at_screen_connect(s)
+    original_at_screen_connect(s)
     
     -- Add transparency to wibox with glass effect
     if s.mywibox then
@@ -818,6 +820,125 @@ beautiful.at_screen_connect = function(s)
         s.mybottomwibox:connect_signal("request::display", function(w)
             w.opacity = 0.9
         end)
+    end
+    
+    -- Find the taglist widget in screen setup
+    local taglist = s.mywibox:get_children_by_id("taglist")[1]
+    if taglist then
+        -- Enhanced appearance for taglist
+        local new_taglist = awful.widget.taglist {
+            screen = s,
+            filter = awful.widget.taglist.filter.all,
+            style = {
+                shape = gears.shape.rounded_rect,
+                font = beautiful.font .. " 14", -- Larger font for tags
+            },
+            layout = {
+                spacing = dpi(10),
+                layout = wibox.layout.fixed.horizontal
+            },
+            widget_template = {
+                {
+                    {
+                        {
+                            id = 'text_role',
+                            widget = wibox.widget.textbox,
+                        },
+                        margins = dpi(10), -- Increased padding
+                        widget = wibox.container.margin,
+                    },
+                    id = 'background_role',
+                    widget = wibox.container.background,
+                },
+                forced_width = dpi(40), -- Fixed width for consistent sizing
+                forced_height = dpi(40), -- Fixed height for consistent sizing
+                create_callback = function(self, tag, index, tags)
+                    self:get_children_by_id('text_role')[1].align = "center"
+                    self:connect_signal('mouse::enter', function()
+                        if self.bg ~= beautiful.bg_focus then
+                            self.backup = self.bg
+                            self.has_backup = true
+                        end
+                        self.bg = beautiful.bg_focus .. "99"
+                    end)
+                    self:connect_signal('mouse::leave', function()
+                        if self.has_backup then self.bg = self.backup end
+                    end)
+                end,
+                widget = wibox.container.background,
+            },
+            buttons = awful.util.taglist_buttons
+        }
+        
+        -- Replace the old taglist with the enhanced one
+        local taglist_container = taglist.parent
+        if taglist_container then
+            taglist_container:replace_widget(taglist, new_taglist)
+        end
+    end
+    
+    -- Make systray collapsed by default
+    local systray = s.mywibox:get_children_by_id("systray")[1]
+    if systray then
+        -- Create a toggle button with an icon
+        local systray_toggle = wibox.widget {
+            {
+                text = "󰀶", -- Icon for tray toggle (use a different one if this doesn't show up correctly)
+                font = "FontAwesome 14",
+                align = "center",
+                widget = wibox.widget.textbox,
+            },
+            bg = beautiful.bg_normal .. "80",
+            widget = wibox.container.background,
+        }
+        
+        -- Style the toggle button
+        systray_toggle.shape = function(cr, w, h)
+            gears.shape.rounded_rect(cr, w, h, dpi(4))
+        end
+        
+        -- Add margins
+        local systray_toggle_with_margin = wibox.widget {
+            systray_toggle,
+            left = dpi(5),
+            right = dpi(5),
+            top = dpi(2),
+            bottom = dpi(2),
+            widget = wibox.container.margin
+        }
+        
+        -- Set up expanded state for systray
+        local systray_visible = false
+        systray.visible = systray_visible
+        
+        -- Toggle systray visibility when clicked
+        systray_toggle:connect_signal("button::press", function(_, _, _, button)
+            if button == 1 then -- Left click
+                systray_visible = not systray_visible
+                systray.visible = systray_visible
+                
+                -- Change background color to indicate state
+                if systray_visible then
+                    systray_toggle.bg = beautiful.bg_focus .. "80"
+                    systray_toggle.fg = beautiful.fg_focus
+                else
+                    systray_toggle.bg = beautiful.bg_normal .. "80"
+                    systray_toggle.fg = beautiful.fg_normal
+                end
+            end
+        end)
+        
+        -- Add the toggle button next to the systray
+        local systray_container = systray.parent
+        if systray_container then
+            -- Create a layout that contains both the toggle and the systray
+            local tray_layout = wibox.layout.fixed.horizontal()
+            tray_layout:add(systray_toggle_with_margin)
+            tray_layout:add(systray)
+            
+            -- Replace the systray with the new layout
+            systray_container:replace_widget(systray, tray_layout)
+        end
     end
 end
 
