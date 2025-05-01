@@ -275,7 +275,7 @@ local net = lain.widget.net({
     end
 })
 net.widget = net_widget
-
+ 
 -- Initialize systray animation variables
 local systray_original_width = dpi(200) -- Approximate default width
 local systray_anim_duration = 0.3 -- Animation duration in seconds
@@ -305,23 +305,23 @@ systray_container.shape = function(cr, w, h) gears.shape.rounded_rect(cr, w, h, 
 -- Create styled system tray with toggle button
 local systray_toggle = wibox.widget {
     {
+    {
         {
-            {
-                id = "icon",
+            id = "icon",
                 -- Use a nicer-looking icon 
                 text = "󰀻", -- Using a Nerd Font app tray icon (fallback to alternative if not available)
                 font = "Symbols Nerd Font 18",
                 align = "center",
                 valign = "center",
-                widget = wibox.widget.textbox,
-            },
+            widget = wibox.widget.textbox,
+        },
             id = "icon_margin",
             left = dpi(8),
             right = dpi(8),
             top = dpi(6),
             bottom = dpi(6),
-            widget = wibox.container.margin
-        },
+        widget = wibox.container.margin
+    },
         id = "icon_container",
         shape = function(cr, w, h) gears.shape.rounded_rect(cr, w, h, dpi(6)) end,
         bg = {
@@ -613,6 +613,12 @@ systray_toggle_with_border:buttons(my_table.join(
 local spr     = wibox.widget.textbox(' ')
 local arrl_dl = separators.arrow_left(theme.bg_focus, "alpha")
 local arrl_ld = separators.arrow_left("alpha", theme.bg_focus)
+
+-- Add notification center button (will be available after initialization)
+local notification_center_button = nil
+if _G.notification_center and _G.notification_center.create_button then
+    notification_center_button = _G.notification_center.create_button()
+end
 
 -- Helper function for creating consistent rounded containers with glass effect
 function theme.create_widget_container(widget, args)
@@ -1072,10 +1078,10 @@ function theme.at_screen_connect(s)
         {
             {
                 text = " ",  -- Icon: microchip
-                font = "FontAwesome 11",
-                widget = wibox.widget.textbox,
-            },
-            cpu.widget,
+                    font = "FontAwesome 11",
+                    widget = wibox.widget.textbox,
+                },
+                cpu.widget,
             spacing = dpi(4),
             layout = wibox.layout.fixed.horizontal
         },
@@ -1093,10 +1099,10 @@ function theme.at_screen_connect(s)
         {
             {
                 text = " ",  -- Icon: memory
-                font = "FontAwesome 11",
-                widget = wibox.widget.textbox,
-            },
-            mem.widget,
+                    font = "FontAwesome 11",
+                    widget = wibox.widget.textbox,
+                },
+                mem.widget,
             spacing = dpi(4),
             layout = wibox.layout.fixed.horizontal
         },
@@ -1112,8 +1118,8 @@ function theme.at_screen_connect(s)
     -- Style the battery widget
     local bat_widget = wibox.widget {
         {
-            baticon,
-            bat.widget,
+                baticon,
+                bat.widget,
             spacing = dpi(4),
             layout = wibox.layout.fixed.horizontal
         },
@@ -1129,8 +1135,8 @@ function theme.at_screen_connect(s)
     -- Style the network widget
     local net_widget = wibox.widget {
         {
-            neticon,
-            net.widget,
+                neticon,
+                net.widget,
             spacing = dpi(4),
             layout = wibox.layout.fixed.horizontal
         },
@@ -1148,10 +1154,10 @@ function theme.at_screen_connect(s)
         {
             {
                 text = " ",  -- Icon: keyboard
-                font = "FontAwesome 11",
-                widget = wibox.widget.textbox,
-            },
-            keyboardlayout,
+                    font = "FontAwesome 11",
+                    widget = wibox.widget.textbox,
+                },
+                keyboardlayout,
             spacing = dpi(4),
             layout = wibox.layout.fixed.horizontal
         },
@@ -1203,6 +1209,14 @@ function theme.at_screen_connect(s)
         {systray_toggle_with_border, systray_container},
         {spacing = dpi(2)}
     )
+    
+    -- Add notification center button to groups if available
+    if notification_center_button then
+        time_group = theme.create_widget_group(
+            {notification_center_button, styled_clock, layoutbox_container},
+            {spacing = dpi(6)}
+        )
+    end
     
     -- Add widgets to the wibox
     s.mywibox:setup {
