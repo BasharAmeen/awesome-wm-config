@@ -659,6 +659,10 @@ local volume_popup = awful.popup {
     placement = awful.placement.centered,
     width = dpi(300),
     height = dpi(120),
+    shape_shadow = false,       -- Disable default shadow
+    shadow_offset_x = 0,        -- No shadow offset
+    shadow_offset_y = 0,
+    shadow_blur_sigma = 0      -- Remove shadow blur
 }
 
 -- Animation for smooth transitions with enhanced easing
@@ -667,6 +671,7 @@ local animation_timeout = 0.008 -- Slightly faster for more responsive feel
 local animation_target_value = 0
 local animation_current_step = 0
 local animation_timer = nil
+local hide_volume_timer = nil -- Variable to store the timer for hiding volume popup
 
 -- Function to animate the progress bar with easing function
 local function animate_progressbar(target)
@@ -717,35 +722,54 @@ local function show_volume_popup()
             volume_popup.opacity = 0
             volume_popup.visible = true
             
-            -- Animate opacity for fade-in
-            local opacity_timer = gears.timer {
-                timeout = 0.01,
+            -- Animate opacity for fade-in - make it faster
+            local opacity_timer_in = gears.timer {
+                timeout = 0.005, -- Faster fade-in (was 0.01)
                 call_now = true,
                 autostart = true,
                 callback = function(t)
-                    volume_popup.opacity = volume_popup.opacity + 0.1
+                    volume_popup.opacity = volume_popup.opacity + 0.15 -- Bigger steps
                     if volume_popup.opacity >= 1 then
                         t:stop()
                     end
                 end
             }
             
+            -- Make sure any existing hide timer is removed
+            if hide_volume_timer then
+                hide_volume_timer:stop()
+            end
+            
             -- Hide popup after a delay with fade-out
-            gears.timer.start_new(2, function()
+            hide_volume_timer = gears.timer {
+                timeout = 0.8, -- Shorter display time (was 2)
+                autostart = true,
+                single_shot = true,
+                callback = function()
                 local opacity_timer_out = gears.timer {
-                    timeout = 0.01,
+                        timeout = 0.005, -- Faster fade-out (was 0.01)
                     call_now = true,
                     autostart = true,
                     callback = function(t)
-                        volume_popup.opacity = volume_popup.opacity - 0.1
+                            volume_popup.opacity = volume_popup.opacity - 0.15 -- Bigger steps
                         if volume_popup.opacity <= 0 then
                             volume_popup.visible = false
                             t:stop()
                         end
                     end
                 }
-                return false
-            end)
+                end
+            }
+            
+            -- Failsafe: ensure popup is hidden after 2 seconds regardless of animation
+            gears.timer {
+                timeout = 2, -- Reduced from 5
+                autostart = true,
+                single_shot = true,
+                callback = function()
+                    volume_popup.visible = false
+                end
+            }
         end)
     end)
 end
