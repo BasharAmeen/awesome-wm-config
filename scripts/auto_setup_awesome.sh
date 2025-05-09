@@ -16,6 +16,7 @@ fi
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     DISTRO=$ID
+    DISTRO_LIKE=$ID_LIKE
 else
     echo "Error: Could not detect the Linux distribution."
     exit 1
@@ -26,10 +27,11 @@ if ! command -v awesome &> /dev/null; then
     echo "Installing Awesome WM..."
     if [ "$DISTRO" = "arch" ]; then
         sudo pacman -S --needed --noconfirm awesome
-    elif [ "$DISTRO" = "debian" ]; then
+    elif [ "$DISTRO" = "debian" ] || [ "$DISTRO" = "ubuntu" ] || [[ "$DISTRO_LIKE" == *"debian"* ]]; then
+        sudo apt update
         sudo apt install -y awesome
     else
-        echo "Error: Unsupported Linux distribution."
+        echo "Error: Unsupported Linux distribution: $DISTRO"
         exit 1
     fi
 fi
@@ -37,10 +39,10 @@ fi
 # Install dependencies
 if [ "$DISTRO" = "arch" ]; then
     sudo "$SCRIPT_DIR/install_deps.sh" --os arch
-elif [ "$DISTRO" = "debian" ]; then
+elif [ "$DISTRO" = "debian" ] || [ "$DISTRO" = "ubuntu" ] || [[ "$DISTRO_LIKE" == *"debian"* ]]; then
     sudo "$SCRIPT_DIR/install_deps.sh" --os debian
 else
-    echo "Error: Unsupported Linux distribution."
+    echo "Error: Unsupported Linux distribution: $DISTRO"
     exit 1
 fi
 

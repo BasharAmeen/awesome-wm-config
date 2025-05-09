@@ -24,10 +24,23 @@ detect_os() {
     elif [ -f "/etc/debian_version" ]; then
         echo "debian"
     else
-        grep -q "ID=arch" /etc/os-release && echo "arch" && return
-        grep -q "ID=debian\|ID=ubuntu\|ID=linuxmint\|ID=pop" /etc/os-release && echo "debian" && return
-        grep -q "ID_LIKE=.*debian" /etc/os-release && echo "debian" && return
-        grep -q "ID_LIKE=.*arch" /etc/os-release && echo "arch" && return
+        # Check OS-release for more information
+        if grep -q "ID=arch" /etc/os-release; then 
+            echo "arch"
+            return
+        fi
+        if grep -q "ID=debian\|ID=ubuntu\|ID=linuxmint\|ID=pop\|ID=elementary\|ID=zorin\|ID=parrot\|ID=kali\|ID=deepin" /etc/os-release; then 
+            echo "debian"
+            return
+        fi
+        if grep -q "ID_LIKE=.*debian" /etc/os-release; then 
+            echo "debian"
+            return
+        fi
+        if grep -q "ID_LIKE=.*arch" /etc/os-release; then 
+            echo "arch"
+            return
+        fi
         echo "unknown"
     fi
 }
@@ -105,6 +118,16 @@ DEBIAN_PACKAGES=(
     "gmrun"                # Run prompt (launched with modkey+r)
     "libinput-tools"       # For touchpad settings
     "gnome-keyring"        # Used in autostart
+    "curl"                 # Required for downloading resources
+    "wget"                 # Alternative for downloads
+    "git"                  # Used for cloning repositories
+    "unzip"                # For extracting archives
+    "x11-xserver-utils"    # X utilities
+)
+
+# Ubuntu might need different package names for some packages
+UBUNTU_FALLBACK_PACKAGES=(
+    "light|brightnessctl"  # Try light first, fall back to brightnessctl
 )
 
 ARCH_PACKAGES=(
@@ -123,6 +146,11 @@ ARCH_PACKAGES=(
     "gmrun"                # Run prompt (launched with modkey+r)
     "libinput"             # For touchpad settings
     "gnome-keyring"        # Used in autostart
+    "curl"                 # Required for downloading resources
+    "wget"                 # Alternative for downloads
+    "git"                  # Used for cloning repositories
+    "unzip"                # For extracting archives
+    "xorg-xset"            # X utilities
 )
 
 # Update package lists based on distro
@@ -131,6 +159,14 @@ if [ "$OS_TYPE" = "debian" ]; then
     apt update
     PACKAGES=("${DEBIAN_PACKAGES[@]}")
     INSTALL_CMD="apt install -y"
+    
+    # Check for Ubuntu and its derivatives
+    if grep -q "ID=ubuntu\|ID_LIKE=.*ubuntu" /etc/os-release; then
+        log "Ubuntu-based system detected. Adding fallback packages..."
+        # Also add Ubuntu-specific fallback packages
+        PACKAGES+=("${UBUNTU_FALLBACK_PACKAGES[@]}")
+    fi
+    
 elif [ "$OS_TYPE" = "arch" ]; then
     log "Updating package lists..."
     pacman -Sy
@@ -145,6 +181,32 @@ for pkg in "${PACKAGES[@]}"; do
         continue
     fi
     
+    # For Ubuntu fallback packages (format: pkg1|pkg2)
+    if [[ $pkg == *"|"* ]] && [ "$OS_TYPE" = "debian" ]; then
+        primary_pkg=$(echo $pkg | cut -d'|' -f1)
+        fallback_pkg=$(echo $pkg | cut -d'|' -f2)
+        
+        log "Checking for $primary_pkg or $fallback_pkg..."
+        if dpkg -s "$primary_pkg" >/dev/null 2>&1; then
+            log "$primary_pkg is already installed."
+        elif dpkg -s "$fallback_pkg" >/dev/null 2>&1; then
+            log "$fallback_pkg is already installed."
+        else
+            log "Trying to install $primary_pkg..."
+            if apt install -y "$primary_pkg" >/dev/null 2>&1; then
+                success "$primary_pkg installed successfully."
+            else
+                log "Failed to install $primary_pkg, trying $fallback_pkg..."
+                if apt install -y "$fallback_pkg" >/dev/null 2>&1; then
+                    success "$fallback_pkg installed successfully."
+                else
+                    error "Failed to install both $primary_pkg and $fallback_pkg."
+                fi
+            fi
+        fi
+        continue
+    fi
+    
     if [ "$OS_TYPE" = "debian" ]; then
         if dpkg -s "$pkg" >/dev/null 2>&1; then
             log "$pkg is already installed."
@@ -155,6 +217,7 @@ for pkg in "${PACKAGES[@]}"; do
                 success "$pkg installed successfully."
             else
                 error "Failed to install $pkg."
+                warn "You may need to install this package manually."
             fi
         fi
     elif [ "$OS_TYPE" = "arch" ]; then
@@ -173,11 +236,28 @@ for pkg in "${PACKAGES[@]}"; do
 done
 
 # Clone or update lain (if not already present)
+log "Checking for lain library..."
 if [ -d "$HOME/.config/awesome/lain" ]; then
     log "Updating lain library..."
     cd "$HOME/.config/awesome/lain" && git pull
 else
     log "Installing lain library..."
+    # Ensure git is installed
+    if ! command -v git &> /dev/null; then
+        log "Git not found. Installing git..."
+        if [ "$OS_TYPE" = "debian" ]; then
+            apt install -y git
+        elif [ "$OS_TYPE" = "arch" ]; then
+            pacman -S --noconfirm git
+        fi
+    fi
+    
+    # Create awesome config directory if it doesn't exist
+    if [ ! -d "$HOME/.config/awesome" ]; then
+        log "Creating awesome config directory..."
+        mkdir -p "$HOME/.config/awesome"
+    fi
+    
     git clone https://github.com/lcpz/lain.git "$HOME/.config/awesome/lain"
 fi
 
@@ -188,7 +268,7 @@ if [ ! -d "$HOME/.config/picom" ]; then
 fi
 
 # Set correct permissions for the user
-ACTUAL_USER=$(logname || who am i | awk '{print $1}')
+ACTUAL_USER=$(logname 2>/dev/null || who am i | awk '{print $1}')
 if [ -z "$ACTUAL_USER" ]; then
     ACTUAL_USER=$(who | grep -v root | head -n 1 | awk '{print $1}')
     if [ -z "$ACTUAL_USER" ]; then
@@ -199,8 +279,8 @@ fi
 
 if [ -n "$ACTUAL_USER" ]; then
     log "Setting correct permissions for user $ACTUAL_USER..."
-    chown -R "$ACTUAL_USER:$ACTUAL_USER" "$HOME/.config/awesome"
-    chown -R "$ACTUAL_USER:$ACTUAL_USER" "$HOME/.config/picom"
+    chown -R "$ACTUAL_USER:$ACTUAL_USER" "$HOME/.config/awesome" 2>/dev/null || warn "Could not set permissions for awesome directory"
+    chown -R "$ACTUAL_USER:$ACTUAL_USER" "$HOME/.config/picom" 2>/dev/null || warn "Could not set permissions for picom directory"
 else
     error "Could not determine the actual user. Please set permissions manually."
 fi
