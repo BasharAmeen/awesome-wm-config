@@ -1,0 +1,52 @@
+# Ignore sessions directory - contains user-specific session data
+sessions/
+
+# Ignore backup files
+*.bak
+*~
+*.swp
+*.swo
+rc.lua_broken
+rc*.bak
+rc*.backup
+
+# Ignore logs and temporary files
+*.log
+*.tmp
+*.temp
+
+# Ignore personal configuration and credentials
+*.key
+*.pem
+*.env
+*credentials*
+
+# Ignore local history
+.history/
+
+# Ignore thumbnails created by file managers
+.thumbnails/
+Thumbs.db
+
+# Ignore IDE and editor specific files
+.vscode/
+.idea/
+*.sublime-*
+
+# Ignore cache files
+.cache/
+__pycache__/
+*.pyc
+
+# Ignore compiled Lua files
+*.lua.c
+*.so
+*.o
+
+# Ignore user-specific wallpaper settings
+wallpaper_current.jpg
+wallpaper_current.png
+current_wallpaper.*
+
+# Ignore picom cache
+picom_cache/
