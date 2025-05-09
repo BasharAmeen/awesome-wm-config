@@ -7,6 +7,7 @@
 # Set up logging
 LOG_FILE="$HOME/.config/awesome/logs/theme_manager.log"
 log() {
+    mkdir -p "$(dirname "$LOG_FILE")" # Ensure log directory exists
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
     echo "$1"
 }
