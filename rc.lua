@@ -25,6 +25,8 @@ local hotkeys_popup = require("awful.hotkeys_popup")
 require("awful.hotkeys_popup.keys")
 local mytable       = awful.util.table or gears.table -- 4.{0,1} compatibility
 local dpi           = require("beautiful.xresources").apply_dpi
+-- Load hidpi support module
+local hidpi         = require("modules.hidpi")
 
 -- }}}
 
@@ -171,7 +173,6 @@ awful.spawn.with_shell(
 
 -- {{{ Variable definitions
 
-
 local themes = {
     "blackburn",       -- 1
     "copland",         -- 2
@@ -184,6 +185,9 @@ local themes = {
     "steamburn",       -- 9
     "vertex"           -- 10
 }
+
+-- Initialize HiDPI support BEFORE loading the theme
+hidpi.setup()
 
 local chosen_theme = themes[7]
 local modkey       = "Mod4"
@@ -1326,7 +1330,25 @@ globalkeys = mytable.join(
 
     -- Get current window properties
     awful.key({ modkey, altkey }, "w", function() rules.window_rules_manager.get_focused_window_properties() end,
-              {description = "show current window properties", group = "mine"})
+              {description = "show current window properties", group = "mine"}),
+
+    -- Add DPI control keybinding
+    awful.key({ modkey, "Control" }, "d", function() 
+        local dpi_control = require("modules.widgets.dpi_control")
+        local popup = dpi_control.create_popup()
+        popup:move_next_to(mouse.screen.geometry)
+        popup.visible = true
+    end, {description = "DPI scaling control", group = "awesome"}),
+    
+    -- Add keybinding to set specific DPI values quickly
+    awful.key({ modkey, "Control" }, "1", function() hidpi.set_dpi(96) end,
+              {description = "Set standard DPI (96)", group = "awesome"}),
+    awful.key({ modkey, "Control" }, "2", function() hidpi.set_dpi(144) end,
+              {description = "Set medium DPI (144)", group = "awesome"}),
+    awful.key({ modkey, "Control" }, "3", function() hidpi.set_dpi(192) end,
+              {description = "Set large DPI (192)", group = "awesome"}),
+    awful.key({ modkey, "Control" }, "4", function() hidpi.set_dpi(240) end,
+              {description = "Set extra large DPI (240)", group = "awesome"})
 )
 
 -- Append window grouping keybindings
