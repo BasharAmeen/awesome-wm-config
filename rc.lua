@@ -257,6 +257,7 @@ beautiful.init(string.format("%s/.config/awesome/themes/%s/theme.lua", os.getenv
 -- Load custom modules after theme initialization
 local system_dashboard = require("modules.widgets.system_dashboard")
 local smart_layout = require("modules.smart_layout")
+local rules = require("modules.rules")
 -- local window_grouping = require("modules.window_grouping")
 
 -- Create a custom system monitor widget
@@ -1317,7 +1318,15 @@ globalkeys = mytable.join(
 
     -- Toggle system dashboard
     awful.key({ modkey, "Control" }, "d", function() system_dashboard.toggle() end,
-              {description = "toggle system dashboard", group = "mine"})
+              {description = "toggle system dashboard", group = "mine"}),
+
+    -- Toggle window rules manager
+    awful.key({ modkey, "Control" }, "w", function() rules.window_rules_manager.toggle() end,
+              {description = "toggle window rules manager", group = "mine"}),
+
+    -- Get current window properties
+    awful.key({ modkey, altkey }, "w", function() rules.window_rules_manager.get_focused_window_properties() end,
+              {description = "show current window properties", group = "mine"})
 )
 
 -- Append window grouping keybindings
