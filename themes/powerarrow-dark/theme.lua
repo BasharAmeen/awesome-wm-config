@@ -261,17 +261,64 @@ theme.volume.widget:buttons(awful.util.table.join(
 local neticon = wibox.widget.imagebox(theme.widget_net)
 local net_widget = wibox.widget.textbox() -- Create a new widget for network
 local net = lain.widget.net({
+    wifi_state = "on",
+    eth_state = "on", -- Enable Ethernet state tracking
+    timeout = 5, -- Update every 5 seconds
     settings = function()
-        -- Fetch network name (SSID)
-        awful.spawn.easy_async("iwgetid --raw", function(ssid)
-            -- Fetch signal power
-            awful.spawn.easy_async("iwconfig 2>/dev/null | grep 'Link Quality' | awk '{print $2}' | tr -d '='", function(signal)
-                net_widget:set_markup(markup.font(theme.font,
-                                  markup("#7AC82E", " " .. ssid)
-                                  .. " " ..
-                                  markup("#46A8C3", " " .. signal .. " ")))
-            end)
-        end)
+        -- Check for any active network connection (ethernet first, then wifi)
+        awful.spawn.easy_async_with_shell(
+            "ip -br addr show up primary | grep -v lo | grep -v 'NO-CARRIER'",
+            function(active_interfaces)
+                if active_interfaces == "" then
+                    -- No active connections
+                    net_widget:set_markup(markup.font(theme.font,
+                        markup("#FF5252", " No network connection ")))
+                    return
+                end
+                
+                -- Try to find Ethernet interfaces (enp, eth, en*, etc.)
+                local is_eth = active_interfaces:match("(en[%w]+)")  -- Modern naming (enp3s0, etc.)
+                    or active_interfaces:match("(eth[%w]+)")         -- Traditional naming (eth0, etc.)
+                    or active_interfaces:match("(e[nm][%w]+)")       -- Other common patterns
+                    or active_interfaces:match("(usb[%w]+)")         -- USB ethernet adapters
+                    or active_interfaces:match("(net[%w]+)")         -- Other possible ethernet names
+                
+                if is_eth then
+                    -- Get the IP address of Ethernet interface
+                    awful.spawn.easy_async_with_shell(
+                        string.format("ip addr show %s | grep 'inet ' | awk '{print $2}' | cut -d/ -f1", is_eth),
+                        function(ip_output)
+                            local ip = ip_output:gsub("%s+", "")
+                            -- We have an Ethernet connection
+                            net_widget:set_markup(markup.font(theme.font,
+                                markup("#7AC82E", " Ethernet: " .. is_eth) .. " " ..
+                                markup("#46A8C3", ip .. " ")))
+                        end
+                    )
+                else
+                    -- No Ethernet, check for WiFi
+                    awful.spawn.easy_async("iwgetid --raw", function(ssid)
+                        ssid = string.gsub(ssid or "", "\n", "")
+                        if ssid and string.len(ssid:gsub("%s+", "")) > 0 then
+                            -- Fetch signal power
+                            awful.spawn.easy_async_with_shell(
+                                "iwconfig 2>/dev/null | grep 'Link Quality' | awk '{print $2}' | tr -d '='", 
+                                function(signal)
+                                    signal = string.gsub(signal or "", "\n", "")
+                                    net_widget:set_markup(markup.font(theme.font,
+                                        markup("#7AC82E", " WiFi: " .. ssid) .. " " ..
+                                        markup("#46A8C3", " " .. signal .. " ")))
+                                end
+                            )
+                        else
+                            -- No network connection detected
+                            net_widget:set_markup(markup.font(theme.font,
+                                markup("#FF5252", " No network connection ")))
+                        end
+                    end)
+                end
+            end
+        )
     end
 })
 net.widget = net_widget
