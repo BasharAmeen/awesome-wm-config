@@ -50,3 +50,4 @@ current_wallpaper.*
 
 # Ignore picom cache
 picom_cache/
+old.zip
