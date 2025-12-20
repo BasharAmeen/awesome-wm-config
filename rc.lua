@@ -27,6 +27,10 @@ local mytable       = awful.util.table or gears.table -- 4.{0,1} compatibility
 local dpi           = require("beautiful.xresources").apply_dpi
 -- Load hidpi support module
 local hidpi         = require("modules.hidpi")
+-- Load notification center module
+local notification_center = require("modules.notification_center")
+-- Load dashboard module
+local dashboard = require("modules.dashboard")
 
 -- }}}
 
@@ -113,9 +117,19 @@ do
     end)
 end
 
--- Customize notifications
-naughty.config.padding = 15
-naughty.config.spacing = 5
+-- Customize notifications (improved queueing/stacking)
+naughty.config.padding = dpi(10)
+naughty.config.spacing = dpi(8)
+naughty.config.defaults.margin = dpi(10)
+naughty.config.defaults.border_width = 1
+naughty.config.defaults.position = "top_right"
+naughty.config.defaults.timeout = 5
+naughty.config.defaults.ontop = true
+-- Limit notification width for cleaner stacking
+naughty.config.defaults.max_width = dpi(400)
+naughty.config.defaults.max_height = dpi(150)
+-- Icon settings
+naughty.config.defaults.icon_size = dpi(48)
 
 -- Safe, simplified notification presets
 naughty.config.presets.normal = {
@@ -147,6 +161,28 @@ naughty.config.presets.critical = {
     border_color = theme_colors.border_focus,
     margin = 10,
 }
+
+-- Callback to intercept ALL notifications (including D-Bus)
+-- Returns false to block the notification when suspended
+naughty.config.notify_callback = function(args)
+    if naughty.suspended then
+        -- Still save to history even when suspended
+        local notification_center = require("modules.notification_center")
+        if notification_center and notification_center.history then
+            pcall(function()
+                notification_center.history.add({
+                    app_name = args.app_name or "System",
+                    title = args.title or "",
+                    message = args.text or args.message or "",
+                    icon = args.icon,
+                    urgency = args.urgency or "normal",
+                })
+            end)
+        end
+        return false  -- Block the notification from displaying
+    end
+    return args  -- Allow notification to display normally
+end
 
 -- }}}
 
@@ -993,26 +1029,44 @@ globalkeys = mytable.join(
 
     -- Toggle notification suspend/resume
     awful.key({ altkey, "Control" }, "space", function()
+        naughty.suspended = not naughty.suspended
+        -- Visual feedback without notification (change wibar color briefly)
         if naughty.suspended then
-            naughty.resume()
-            naughty.notify {
-                title = "Notifications",
-                text = "Enabled",
-                timeout = 2,
-            }
+            -- Show on wibar that notifications are disabled
+            for s in screen do
+                if s.mywibox then
+                    local original_bg = s.mywibox.bg
+                    s.mywibox.bg = "#ff555580"
+                    gears.timer.start_new(0.5, function()
+                        s.mywibox.bg = original_bg
+                        return false
+                    end)
+                end
+            end
         else
-            naughty.notify {
-                title = "Notifications",
-                text = "Disabled",
-                timeout = 2,
-            }
-            -- Small delay to show the notification before suspending
-            gears.timer.start_new(0.5, function()
-                naughty.suspend()
-                return false
-            end)
+            -- Show on wibar that notifications are enabled
+            for s in screen do
+                if s.mywibox then
+                    local original_bg = s.mywibox.bg
+                    s.mywibox.bg = "#50fa7b80"
+                    gears.timer.start_new(0.5, function()
+                        s.mywibox.bg = original_bg
+                        return false
+                    end)
+                end
+            end
         end
     end, {description = "toggle notifications", group = "hotkeys"}),
+
+    -- Open notification center (Super + ` backtick key)
+    awful.key({ modkey }, "`", function()
+        notification_center.toggle()
+    end, {description = "toggle notification center", group = "hotkeys"}),
+
+    -- Toggle dashboard sidebar (Super + d)
+    awful.key({ modkey }, "d", function()
+        dashboard.toggle()
+    end, {description = "toggle dashboard", group = "hotkeys"}),
    
      
     

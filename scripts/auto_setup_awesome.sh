@@ -6,6 +6,8 @@
 set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+AWESOME_CONFIG="$HOME/.config/awesome"
 
 # Colors
 log()     { echo -e "\033[1;34m[INFO]\033[0m $1"; }
@@ -65,7 +67,54 @@ install_deps() {
     success "Dependencies installed"
 }
 
-# Step 3: Install Nerd Fonts (optional)
+# Step 3: Copy configuration files to ~/.config/awesome
+sync_config() {
+    log "Syncing configuration files..."
+    
+    # Create directories
+    mkdir -p "$AWESOME_CONFIG/modules"
+    mkdir -p "$AWESOME_CONFIG/data/notifications/icons"
+    mkdir -p "$AWESOME_CONFIG/themes/settings"
+    mkdir -p "$AWESOME_CONFIG/logs"
+    
+    # Copy main config
+    if [ -f "$PROJECT_DIR/rc.lua" ]; then
+        cp "$PROJECT_DIR/rc.lua" "$AWESOME_CONFIG/rc.lua"
+        log "Copied rc.lua"
+    fi
+    
+    # Copy modules (including notification_center)
+    if [ -d "$PROJECT_DIR/modules" ]; then
+        cp -r "$PROJECT_DIR/modules/"* "$AWESOME_CONFIG/modules/" 2>/dev/null || true
+        log "Copied modules"
+    fi
+    
+    # Copy themes
+    if [ -d "$PROJECT_DIR/themes" ]; then
+        cp -r "$PROJECT_DIR/themes/"* "$AWESOME_CONFIG/themes/" 2>/dev/null || true
+        log "Copied themes"
+    fi
+    
+    # Copy wallpapers
+    if [ -d "$PROJECT_DIR/wallpapers" ]; then
+        mkdir -p "$AWESOME_CONFIG/wallpapers"
+        cp -r "$PROJECT_DIR/wallpapers/"* "$AWESOME_CONFIG/wallpapers/" 2>/dev/null || true
+        log "Copied wallpapers"
+    fi
+    
+    # Copy scripts
+    mkdir -p "$AWESOME_CONFIG/scripts"
+    cp "$SCRIPT_DIR/"*.sh "$AWESOME_CONFIG/scripts/" 2>/dev/null || true
+    chmod +x "$AWESOME_CONFIG/scripts/"*.sh 2>/dev/null || true
+    log "Copied scripts"
+    
+    # Copy other config files
+    [ -f "$PROJECT_DIR/set_wallpaper.sh" ] && cp "$PROJECT_DIR/set_wallpaper.sh" "$AWESOME_CONFIG/"
+    
+    success "Configuration synced to $AWESOME_CONFIG"
+}
+
+# Step 4: Install Nerd Fonts (optional)
 install_fonts() {
     read -p "Install Nerd Fonts for icons? (y/n) " -n 1 -r
     echo
@@ -77,7 +126,7 @@ install_fonts() {
     fi
 }
 
-# Step 4: Configure HiDPI (optional)
+# Step 5: Configure HiDPI (optional)
 setup_hidpi() {
     read -p "Configure HiDPI scaling? (y/n) " -n 1 -r
     echo
@@ -98,7 +147,7 @@ setup_hidpi() {
     fi
 }
 
-# Step 5: Save current theme (optional)
+# Step 6: Save current theme (optional)
 setup_theme() {
     read -p "Save current theme settings? (y/n) " -n 1 -r
     echo
@@ -125,6 +174,7 @@ main() {
     
     install_awesome
     install_deps
+    sync_config
     install_fonts
     setup_hidpi
     setup_theme
