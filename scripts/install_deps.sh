@@ -101,6 +101,22 @@ fi
 
 log "Checking and installing dependencies for enhanced Awesome WM setup on $OS_TYPE..."
 
+# Determine the actual user and their home directory
+ACTUAL_USER=$(logname 2>/dev/null || who am i | awk '{print $1}')
+if [ -z "$ACTUAL_USER" ]; then
+    ACTUAL_USER=$(who | grep -v root | head -n 1 | awk '{print $1}')
+    if [ -z "$ACTUAL_USER" ]; then
+        ACTUAL_USER=$SUDO_USER
+    fi
+fi
+
+if [ -n "$ACTUAL_USER" ]; then
+    USER_HOME=$(getent passwd "$ACTUAL_USER" | cut -d: -f6)
+else
+    warn "Could not determine actual user, using HOME=$HOME"
+    USER_HOME="$HOME"
+fi
+
 # Define packages for each OS
 DEBIAN_PACKAGES=(
     "picom"                # Compositor for transparency effects (used for visual effects)
@@ -138,8 +154,8 @@ ARCH_PACKAGES=(
     "ttf-font-awesome"     # Icon font for UI elements (used for system widgets)
     "noto-fonts"           # Comprehensive font with good Unicode coverage
     "noto-fonts-emoji"     # Emoji font
-    "light"                # Backlight control (used for brightness adjustment)
-    "pulseaudio-utils"     # Audio controls (used for volume control)
+    "brightnessctl"        # Backlight control (replaces light which is AUR-only)
+    "libpulse"             # PulseAudio client library (provides pactl)
     # "firefox"              # Browser (explicitly defined as browser)
     "copyq"                # Clipboard manager (spawned in autostart)
     "network-manager-applet" # Network management (nm-applet spawned in autostart)
@@ -237,9 +253,9 @@ done
 
 # Clone or update lain (if not already present)
 log "Checking for lain library..."
-if [ -d "$HOME/.config/awesome/lain" ]; then
+if [ -d "$USER_HOME/.config/awesome/lain" ]; then
     log "Updating lain library..."
-    cd "$HOME/.config/awesome/lain" && git pull
+    cd "$USER_HOME/.config/awesome/lain" && git pull
 else
     log "Installing lain library..."
     # Ensure git is installed
@@ -253,36 +269,27 @@ else
     fi
     
     # Create awesome config directory if it doesn't exist
-    if [ ! -d "$HOME/.config/awesome" ]; then
+    if [ ! -d "$USER_HOME/.config/awesome" ]; then
         log "Creating awesome config directory..."
-        mkdir -p "$HOME/.config/awesome"
+        mkdir -p "$USER_HOME/.config/awesome"
     fi
     
-    git clone https://github.com/lcpz/lain.git "$HOME/.config/awesome/lain"
+    git clone https://github.com/lcpz/lain.git "$USER_HOME/.config/awesome/lain"
 fi
 
 # Create picom configuration directory if it doesn't exist
-if [ ! -d "$HOME/.config/picom" ]; then
+if [ ! -d "$USER_HOME/.config/picom" ]; then
     log "Creating picom configuration directory..."
-    mkdir -p "$HOME/.config/picom"
+    mkdir -p "$USER_HOME/.config/picom"
 fi
 
 # Set correct permissions for the user
-ACTUAL_USER=$(logname 2>/dev/null || who am i | awk '{print $1}')
-if [ -z "$ACTUAL_USER" ]; then
-    ACTUAL_USER=$(who | grep -v root | head -n 1 | awk '{print $1}')
-    if [ -z "$ACTUAL_USER" ]; then
-        warn "Could not determine the actual user. Using SUDO_USER environment variable."
-        ACTUAL_USER=$SUDO_USER
-    fi
-fi
-
 if [ -n "$ACTUAL_USER" ]; then
     log "Setting correct permissions for user $ACTUAL_USER..."
-    chown -R "$ACTUAL_USER:$ACTUAL_USER" "$HOME/.config/awesome" 2>/dev/null || warn "Could not set permissions for awesome directory"
-    chown -R "$ACTUAL_USER:$ACTUAL_USER" "$HOME/.config/picom" 2>/dev/null || warn "Could not set permissions for picom directory"
+    chown -R "$ACTUAL_USER:$ACTUAL_USER" "$USER_HOME/.config/awesome" 2>/dev/null || warn "Could not set permissions for awesome directory"
+    chown -R "$ACTUAL_USER:$ACTUAL_USER" "$USER_HOME/.config/picom" 2>/dev/null || warn "Could not set permissions for picom directory"
 else
-    error "Could not determine the actual user. Please set permissions manually."
+    warn "Could not determine the actual user. Please set permissions manually."
 fi
 
 success "All dependencies installed and configured!"

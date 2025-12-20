@@ -147,4 +147,4 @@ local volume_icon = wibox.widget {
 }
 
 Then restart Awesome WM with Super+Ctrl+r.
-EOF 
+EOF

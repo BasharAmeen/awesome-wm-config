@@ -117,33 +117,35 @@ end
 naughty.config.padding = 15
 naughty.config.spacing = 5
 
--- Custom notification styles with transparency and rounded corners
+-- Safe, simplified notification presets
 naughty.config.presets.normal = {
     timeout = 5,
     position = "top_right",
-    bg = add_alpha(theme_colors.bg_normal, 0.8),
+    bg = theme_colors.bg_normal,
     fg = theme_colors.fg_normal,
-    border_width = 2,
-    border_color = add_alpha(theme_colors.border_normal, 0.7),
+    border_width = 1,
+    border_color = theme_colors.border_normal,
     margin = 10,
-    opacity = 0.9,
-    shape = function(cr, w, h)
-        gears.shape.rounded_rect(cr, w, h, 8)
-    end
 }
 
-naughty.config.presets.low = gears.table.clone(naughty.config.presets.normal)
+naughty.config.presets.low = {
+    timeout = 5,
+    position = "top_right",
+    bg = theme_colors.bg_normal,
+    fg = theme_colors.fg_normal,
+    border_width = 1,
+    border_color = theme_colors.border_normal,
+    margin = 10,
+}
+
 naughty.config.presets.critical = {
     timeout = 0,
-    bg = add_alpha(theme_colors.bg_urgent, 0.8),
+    position = "top_right",
+    bg = theme_colors.bg_urgent,
     fg = theme_colors.fg_urgent,
     border_width = 2,
-    border_color = add_alpha(theme_colors.border_focus, 0.9),
+    border_color = theme_colors.border_focus,
     margin = 10,
-    opacity = 0.9,
-    shape = function(cr, w, h)
-        gears.shape.rounded_rect(cr, w, h, 8)
-    end
 }
 
 -- }}}
@@ -978,21 +980,39 @@ globalkeys = mytable.join(
 
 
 
--- Destroy all notifications
-    awful.key({ altkey,           }, "space", function() naughty.destroy_all_notifications() end,
-              {description = "destroy all notifications", group = "hotkeys"}),
-              
-    -- togale enable/disable_icon all notifications
-    -- show a notification with the current state before toggle enable/disable
+-- Safely dismiss all notifications (prevents freeze)
+    awful.key({ altkey }, "space", function()
+        -- Iterate through active notifications and destroy them safely
+        local notifications = naughty.active
+        if notifications then
+            for _, n in ipairs(notifications) do
+                n:destroy(naughty.notification_closed_reason.dismissed_by_user)
+            end
+        end
+    end, {description = "dismiss all notifications", group = "hotkeys"}),
+
+    -- Toggle notification suspend/resume
     awful.key({ altkey, "Control" }, "space", function()
-        local n_enabled = naughty.is_suspended()
-        naughty.notify {
-            preset = naughty.config.presets.normal,
-            title = "Notifications",
-            text = "Notifications are " .. (n_enabled and "enabled" or "disabled"),
-        }
-        naughty.toggle()
-    end, {description = "toggle enable/disable all notifications", group = "hotkeys"}),
+        if naughty.suspended then
+            naughty.resume()
+            naughty.notify {
+                title = "Notifications",
+                text = "Enabled",
+                timeout = 2,
+            }
+        else
+            naughty.notify {
+                title = "Notifications",
+                text = "Disabled",
+                timeout = 2,
+            }
+            -- Small delay to show the notification before suspending
+            gears.timer.start_new(0.5, function()
+                naughty.suspend()
+                return false
+            end)
+        end
+    end, {description = "toggle notifications", group = "hotkeys"}),
    
      
     
