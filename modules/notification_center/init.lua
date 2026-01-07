@@ -12,15 +12,9 @@ local notification_center = {}
 local history = require("modules.notification_center.history")
 notification_center.history = history
 
--- Track if we're currently processing to avoid recursion
-local is_processing = false
-
 -- Helper function to save notification to history
 local function save_notification(args)
-    if is_processing then return end
-    is_processing = true
-    
-    -- Use a timer to avoid blocking
+    -- Use a timer to avoid blocking main thread with file I/O
     gears.timer.start_new(0.1, function()
         pcall(function()
             history.add({
@@ -31,23 +25,13 @@ local function save_notification(args)
                 urgency = args.urgency or "normal",
             })
         end)
-        is_processing = false
         return false
     end)
 end
 
--- Hook into naughty.notify (catches all notification calls, even when suspended)
-local original_notify = naughty.notify
-naughty.notify = function(args)
-    -- ALWAYS save to history first, before checking suspension
-    save_notification(args)
-    
-    -- Call original notify (which handles suspension internally)
-    return original_notify(args)
-end
-
--- Also hook into the newer notification API for external D-Bus notifications
+-- Hook into notification system
 if naughty.connect_signal then
+    -- Modern AwesomeWM (preferred): Hook into the signal
     naughty.connect_signal("added", function(n)
         save_notification({
             app_name = n.app_name or "System",
@@ -57,11 +41,24 @@ if naughty.connect_signal then
             urgency = n.urgency or "normal",
         })
     end)
+else
+    -- Fallback for older versions: Override naughty.notify
+    local original_notify = naughty.notify
+    naughty.notify = function(args)
+        save_notification(args)
+        return original_notify(args)
+    end
 end
 
 -- Open rofi notification history viewer
 function notification_center.show()
-    awful.spawn.with_shell("~/.config/awesome/scripts/notification_history.sh")
+    local script_path = gears.filesystem.get_configuration_dir() .. "modules/notification_center/rofi_viewer.sh"
+    local history_path = history.FILE_PATH
+    
+    -- Ensure script is executable (just in case)
+    awful.spawn.with_shell("chmod +x " .. script_path)
+    
+    awful.spawn.with_shell(script_path .. " " .. history_path)
 end
 
 -- Alias for toggle

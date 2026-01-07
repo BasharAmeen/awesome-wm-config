@@ -13,6 +13,8 @@ local HISTORY_FILE = DATA_DIR .. "history.json"
 local ICONS_DIR = DATA_DIR .. "icons/"
 local MAX_HISTORY = 500  -- Maximum notifications to keep
 
+history.FILE_PATH = HISTORY_FILE
+
 -- Ensure directories exist
 local function ensure_dirs()
     os.execute("mkdir -p " .. ICONS_DIR)

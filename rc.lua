@@ -225,7 +225,7 @@ local themes = {
 }
 
 -- Initialize HiDPI support BEFORE loading the theme
-hidpi.setup()
+-- hidpi.setup() -- Disabled to prevent DPI changes
 
 local chosen_theme = themes[7]
 local modkey       = "Mod4"
@@ -1603,6 +1603,26 @@ awful.rules.rules = {
     -- Add titlebars to normal clients and dialogs
     { rule_any = {type = { "normal", "dialog" }
       }, properties = { titlebars_enabled = false }
+    },
+
+    -- Live wallpaper rule: mpv window acting as animated wallpaper
+    { rule = { class = "mpv", instance = "live_wallpaper" },
+      properties = {
+        floating = true,
+        below = true,
+        sticky = true,
+        skip_taskbar = true,
+        focusable = false,
+        titlebars_enabled = false,
+        border_width = 0,
+        type = "desktop",  -- Desktop type ensures it's always at the bottom layer
+      },
+      callback = function(c)
+        -- Set geometry to cover entire screen
+        local s = c.screen
+        c:geometry({ x = 0, y = 0, width = s.geometry.width, height = s.geometry.height })
+        c:tags(s.tags)  -- Show on all tags
+      end
     },
 
     -- Set Firefox to always map on the tag named "2" on screen 1.

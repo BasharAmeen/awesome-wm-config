@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <style>
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 1920px;
+            height: 1080px;
+            overflow: hidden;
+            background: #0f0f23;
+        }
+
+        body {
+            background: radial-gradient(ellipse at 70% 60%, #1e3a5f 0%, #16213e 25%, #1a1a2e 50%, #0f0f23 100%);
+            position: relative;
+        }
+
+        /* Subtle grid pattern */
+        .grid-overlay {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(rgba(122, 162, 247, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(122, 162, 247, 0.02) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        /* Neural network nodes */
+        .node {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: #7aa2f7;
+            border-radius: 50%;
+            box-shadow: 0 0 15px #7aa2f7, 0 0 30px rgba(122, 162, 247, 0.5);
+        }
+
+        .node.accent {
+            background: #a78bfa;
+            box-shadow: 0 0 15px #a78bfa, 0 0 30px rgba(167, 139, 250, 0.5);
+        }
+
+        .node.small {
+            width: 3px;
+            height: 3px;
+            box-shadow: 0 0 8px currentColor;
+        }
+
+        /* Connection lines */
+        .connection {
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(90deg, rgba(122, 162, 247, 0.4), rgba(167, 139, 250, 0.2), transparent);
+            transform-origin: left center;
+        }
+
+        /* Drone container - positioned for 1920x1080 */
+        .drone-container {
+            position: absolute;
+            right: 150px;
+            bottom: 120px;
+            width: 450px;
+            height: 350px;
+        }
+
+        /* Glow effects */
+        .drone-glow {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, rgba(56, 189, 248, 0.2) 0%, rgba(167, 139, 250, 0.1) 40%, transparent 70%);
+            filter: blur(40px);
+        }
+
+        /* Drone SVG */
+        .drone-svg {
+            position: absolute;
+            width: 350px;
+            height: 250px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .drone-arm {
+            fill: none;
+            stroke: #38bdf8;
+            stroke-width: 3;
+            stroke-linecap: round;
+            filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.8));
+        }
+
+        .drone-rotor {
+            fill: none;
+            stroke: rgba(122, 162, 247, 0.6);
+            stroke-width: 1.5;
+        }
+
+        .drone-rotor-glow {
+            fill: rgba(56, 189, 248, 0.08);
+        }
+
+        .drone-body {
+            fill: #1a1b26;
+            stroke: #38bdf8;
+            stroke-width: 2;
+            filter: drop-shadow(0 0 15px rgba(56, 189, 248, 0.7));
+        }
+
+        .drone-camera {
+            fill: #0f0f23;
+            stroke: #a78bfa;
+            stroke-width: 1.5;
+            filter: drop-shadow(0 0 8px rgba(167, 139, 250, 0.7));
+        }
+
+        .led-front {
+            fill: #38bdf8;
+            filter: drop-shadow(0 0 12px #38bdf8);
+        }
+
+        .led-rear {
+            fill: #f7768e;
+            filter: drop-shadow(0 0 12px #f7768e);
+        }
+
+        /* Particles */
+        .particle {
+            position: absolute;
+            background: rgba(122, 162, 247, 0.5);
+            border-radius: 50%;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="grid-overlay"></div>
+
+    <!-- Neural network - top left -->
+    <div class="node" style="left: 60px; top: 140px;"></div>
+    <div class="node" style="left: 100px; top: 100px;"></div>
+    <div class="node accent" style="left: 150px; top: 150px;"></div>
+    <div class="node" style="left: 90px; top: 190px;"></div>
+    <div class="node small" style="left: 190px; top: 120px;"></div>
+    <div class="node accent small" style="left: 130px; top: 80px;"></div>
+    <div class="connection" style="left: 66px; top: 143px; width: 40px; transform: rotate(-40deg);"></div>
+    <div class="connection" style="left: 106px; top: 103px; width: 55px; transform: rotate(40deg);"></div>
+    <div class="connection" style="left: 96px; top: 193px; width: 60px; transform: rotate(-25deg);"></div>
+    <div class="connection" style="left: 66px; top: 143px; width: 35px; transform: rotate(55deg);"></div>
+
+    <!-- Neural network - bottom left -->
+    <div class="node" style="left: 100px; top: 850px;"></div>
+    <div class="node accent" style="left: 160px; top: 800px;"></div>
+    <div class="node" style="left: 140px; top: 900px;"></div>
+    <div class="node small" style="left: 210px; top: 860px;"></div>
+    <div class="connection" style="left: 106px; top: 853px; width: 65px; transform: rotate(-35deg);"></div>
+    <div class="connection" style="left: 146px; top: 903px; width: 50px; transform: rotate(-25deg);"></div>
+
+    <!-- Scattered nodes -->
+    <div class="node small" style="left: 450px; top: 200px;"></div>
+    <div class="node small accent" style="left: 700px; top: 300px;"></div>
+    <div class="node small" style="left: 1100px; top: 180px;"></div>
+    <div class="node small accent" style="left: 900px; top: 600px;"></div>
+    <div class="node small" style="left: 300px; top: 550px;"></div>
+    <div class="node small" style="left: 550px; top: 750px;"></div>
+
+    <!-- Particles -->
+    <div class="particle" style="left: 350px; top: 250px; width: 2px; height: 2px;"></div>
+    <div class="particle" style="left: 550px; top: 175px; width: 2px; height: 2px;"></div>
+    <div class="particle" style="left: 800px; top: 350px; width: 3px; height: 3px;"></div>
+    <div class="particle" style="left: 1000px; top: 450px; width: 2px; height: 2px;"></div>
+    <div class="particle" style="left: 250px; top: 650px; width: 2px; height: 2px;"></div>
+    <div class="particle" style="left: 650px; top: 500px; width: 2px; height: 2px;"></div>
+    <div class="particle" style="left: 1200px; top: 300px; width: 2px; height: 2px;"></div>
+    <div class="particle" style="left: 1400px; top: 400px; width: 2px; height: 2px;"></div>
+
+    <!-- Drone -->
+    <div class="drone-container">
+        <div class="drone-glow"></div>
+        <svg class="drone-svg" viewBox="0 0 300 220">
+            <defs>
+                <linearGradient id="droneGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#38bdf8" />
+                    <stop offset="100%" style="stop-color:#a78bfa" />
+                </linearGradient>
+            </defs>
+
+            <!-- Rotor glow -->
+            <ellipse class="drone-rotor-glow" cx="60" cy="70" rx="45" ry="12" />
+            <ellipse class="drone-rotor-glow" cx="240" cy="70" rx="45" ry="12" />
+            <ellipse class="drone-rotor-glow" cx="60" cy="150" rx="45" ry="12" />
+            <ellipse class="drone-rotor-glow" cx="240" cy="150" rx="45" ry="12" />
+
+            <!-- Rotor circles -->
+            <ellipse class="drone-rotor" cx="60" cy="70" rx="42" ry="11" />
+            <ellipse class="drone-rotor" cx="240" cy="70" rx="42" ry="11" />
+            <ellipse class="drone-rotor" cx="60" cy="150" rx="42" ry="11" />
+            <ellipse class="drone-rotor" cx="240" cy="150" rx="42" ry="11" />
+
+            <!-- Arms -->
+            <line class="drone-arm" x1="95" y1="90" x2="125" y2="100" />
+            <line class="drone-arm" x1="205" y1="90" x2="175" y2="100" />
+            <line class="drone-arm" x1="95" y1="130" x2="125" y2="120" />
+            <line class="drone-arm" x1="205" y1="130" x2="175" y2="120" />
+
+            <!-- Motor housings -->
+            <circle class="drone-body" cx="60" cy="70" r="10" />
+            <circle class="drone-body" cx="240" cy="70" r="10" />
+            <circle class="drone-body" cx="60" cy="150" r="10" />
+            <circle class="drone-body" cx="240" cy="150" r="10" />
+
+            <!-- Body -->
+            <rect class="drone-body" x="120" y="95" width="60" height="30" rx="8" />
+
+            <!-- Camera -->
+            <rect class="drone-camera" x="138" y="130" width="24" height="15" rx="3" />
+            <circle style="fill: rgba(56, 189, 248, 0.6);" cx="150" cy="137" r="4" />
+
+            <!-- LEDs -->
+            <circle class="led-front" cx="60" cy="70" r="3" />
+            <circle class="led-front" cx="240" cy="70" r="3" />
+            <circle class="led-rear" cx="60" cy="150" r="3" />
+            <circle class="led-rear" cx="240" cy="150" r="3" />
+            <circle class="led-front" cx="150" cy="110" r="2" />
+        </svg>
+    </div>
+</body>
+
+</html>

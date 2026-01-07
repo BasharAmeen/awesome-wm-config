@@ -126,24 +126,33 @@ install_fonts() {
     fi
 }
 
-# Step 5: Configure HiDPI (optional)
+# Step 5: Configure HiDPI (optional) - DISABLED BY DEFAULT
 setup_hidpi() {
-    read -p "Configure HiDPI scaling? (y/n) " -n 1 -r
+    echo ""
+    warn "HiDPI scaling changes DPI for ALL applications."
+    warn "Only enable this if you have a 4K/HiDPI display AND want 2x scaling."
+    echo ""
+    read -p "Configure HiDPI scaling? (y/n) [default: n] " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        read -p "Enter DPI (96=1x, 144=1.5x, 192=2x): " DPI
-        DPI=${DPI:-192}
+        echo "DPI values: 96 (1x, standard), 144 (1.5x), 192 (2x)"
+        read -p "Enter DPI [default: 96]: " DPI
+        DPI=${DPI:-96}
         
-        read -p "Make persistent (create xprofile)? (y/n) " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            "$SCRIPT_DIR/set_hidpi.sh" --persist "$DPI"
+        if [ "$DPI" -gt 96 ]; then
+            read -p "Make persistent (modifies .xprofile)? (y/n) " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                "$SCRIPT_DIR/set_hidpi.sh" --persist "$DPI"
+            else
+                "$SCRIPT_DIR/set_hidpi.sh" --set "$DPI"
+            fi
+            success "HiDPI configured to $DPI"
         else
-            "$SCRIPT_DIR/set_hidpi.sh" --set "$DPI"
+            log "Standard DPI (96) - no changes needed"
         fi
-        success "HiDPI configured"
     else
-        warn "Skipped HiDPI"
+        log "Skipped HiDPI configuration (recommended for most displays)"
     fi
 }
 
